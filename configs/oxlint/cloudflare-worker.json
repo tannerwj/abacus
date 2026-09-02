@@ -1,0 +1,16 @@
+{
+  "$schema": "../../node_modules/oxlint/configuration_schema.json",
+  "extends": ["./typescript.json"],
+  "plugins": ["typescript", "oxc", "unicorn", "promise", "import", "react"],
+  "settings": { "react": { "version": "19" } },
+  "rules": {
+    "react/react-in-jsx-scope": "off",
+    "typescript/no-floating-promises": ["error", { "ignoreVoid": true }],
+    "typescript/no-misused-promises": "error",
+    "no-restricted-globals": ["error", { "name": "process", "message": "Workers have no process.env — read from the env binding." }, { "name": "__dirname", "message": "No filesystem in Workers." }, { "name": "__filename", "message": "No filesystem in Workers." }]
+  },
+  "overrides": [
+    { "files": ["scripts/**", "*.config.*", "vite.config.*", "vitest.config.*"], "rules": { "no-restricted-globals": "off", "no-console": "off" } },
+    { "files": ["**/*.test.*", "**/test/**"], "rules": { "no-restricted-globals": "off" } }
+  ]
+}
