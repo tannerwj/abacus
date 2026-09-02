@@ -4,22 +4,37 @@
   "description": "Plug-and-play quality gates for TypeScript projects: oxlint presets (type-aware), cyclomatic/ABC complexity budgets, and gzip bundle-size budgets. Presets for plain TypeScript, Cloudflare Workers, and Vite SPAs.",
   "type": "module",
   "license": "MIT",
-  "repository": { "type": "git", "url": "git@github.com:tannerwj/abacus.git" },
-  "bin": { "abacus": "./dist/cli.js" },
-  "files": ["dist", "configs", "README.md"],
-  "exports": { ".": "./dist/index.js", "./configs/*": "./configs/*" },
+  "repository": {
+    "type": "git",
+    "url": "git@github.com:tannerwj/abacus.git"
+  },
+  "bin": {
+    "abacus": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "configs",
+    "README.md"
+  ],
+  "exports": {
+    ".": "./dist/index.js",
+    "./configs/*": "./configs/*"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "test": "vitest run",
-    "check": "tsc -p tsconfig.json --noEmit && vitest run && node dist/cli.js abc && oxlint --type-aware src test",
-    "prepare": "tsc -p tsconfig.json"
+    "check": "tsc -p tsconfig.json --noEmit && vitest run && node dist/cli.js abc && oxlint --type-aware src test"
   },
   "peerDependencies": {
     "oxlint": ">=1.80.0",
     "oxlint-tsgolint": ">=7.0.0",
     "typescript": ">=5.5"
   },
-  "peerDependenciesMeta": { "oxlint-tsgolint": { "optional": true } },
+  "peerDependenciesMeta": {
+    "oxlint-tsgolint": {
+      "optional": true
+    }
+  },
   "devDependencies": {
     "@types/node": "^22.10.2",
     "oxlint": "^1.80.0",
@@ -27,5 +42,7 @@
     "typescript": "^5.7.2",
     "vitest": "^2.1.8"
   },
-  "engines": { "node": ">=20" }
+  "engines": {
+    "node": ">=20"
+  }
 }

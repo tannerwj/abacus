@@ -1,0 +1,58 @@
+/**
+ * `abacus init --preset <p>` — drop the config files into a repo and wire
+ * package.json scripts. Never overwrites an existing file; prints what to do
+ * by hand instead.
+ */
+import fs from "node:fs";
+import path from "node:path";
+import { CONFIG_FILE, defaults } from "./config.js";
+const OXLINT_PRESET = {
+    "typescript": "@tjohnson/abacus/configs/oxlint/typescript.json",
+    "cloudflare-worker": "@tjohnson/abacus/configs/oxlint/cloudflare-worker.json",
+    "vite-spa": "@tjohnson/abacus/configs/oxlint/vite-spa.json"
+};
+function writeIfMissing(file, content) {
+    if (fs.existsSync(file)) {
+        console.log(`  skip  ${path.basename(file)} (exists)`);
+        return false;
+    }
+    fs.writeFileSync(file, content);
+    console.log(`  write ${path.basename(file)}`);
+    return true;
+}
+export function init(preset, cwd = process.cwd()) {
+    console.log(`abacus init — preset ${preset}\n`);
+    const config = defaults(preset);
+    writeIfMissing(path.join(cwd, CONFIG_FILE), `${JSON.stringify({ $schema: "./node_modules/@tjohnson/abacus/configs/abacus.schema.json", ...config }, null, 2)}\n`);
+    writeIfMissing(path.join(cwd, ".oxlintrc.json"), `${JSON.stringify({
+        $schema: "./node_modules/oxlint/configuration_schema.json",
+        extends: [`./node_modules/${OXLINT_PRESET[preset]}`],
+        ignorePatterns: ["dist/**", "node_modules/**", ".wrangler/**"],
+        rules: {},
+        overrides: []
+    }, null, 2)}\n`);
+    const pkgFile = path.join(cwd, "package.json");
+    if (fs.existsSync(pkgFile)) {
+        const pkg = JSON.parse(fs.readFileSync(pkgFile, "utf8"));
+        pkg.scripts ??= {};
+        const wanted = { lint: "oxlint --type-aware", abc: "abacus abc", size: "abacus size" };
+        let changed = false;
+        for (const [name, cmd] of Object.entries(wanted)) {
+            if (pkg.scripts[name]) {
+                console.log(`  keep  scripts.${name} = ${pkg.scripts[name]}`);
+                continue;
+            }
+            pkg.scripts[name] = cmd;
+            changed = true;
+            console.log(`  add   scripts.${name} = ${cmd}`);
+        }
+        if (changed)
+            fs.writeFileSync(pkgFile, `${JSON.stringify(pkg, null, 2)}\n`);
+    }
+    console.log(`
+Next:
+  1. pnpm add -D oxlint oxlint-tsgolint   (type-aware lint)
+  2. add "pnpm lint && pnpm abc" to your check script; "pnpm size" after build
+  3. run \`abacus abc --top 20\` and split (or allow-list with a reason) anything over budget
+  4. tsconfig paths must be relative ("./src/*") and without baseUrl for tsgolint`);
+}
