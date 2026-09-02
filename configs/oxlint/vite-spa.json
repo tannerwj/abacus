@@ -1,0 +1,10 @@
+{
+  "$schema": "../../node_modules/oxlint/configuration_schema.json",
+  "extends": ["./typescript.json"],
+  "plugins": ["typescript", "oxc", "unicorn", "promise", "import", "react", "jsx-a11y"],
+  "settings": { "react": { "version": "19" } },
+  "rules": {
+    "react/react-in-jsx-scope": "off",
+    "react/no-array-index-key": "warn"
+  }
+}

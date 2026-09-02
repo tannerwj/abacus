@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "abacus.config.json",
+  "type": "object",
+  "properties": {
+    "$schema": { "type": "string" },
+    "preset": { "enum": ["typescript", "cloudflare-worker", "vite-spa"] },
+    "roots": { "type": "array", "items": { "type": "string" }, "description": "Source roots scanned for ABC scores" },
+    "exclude": { "type": "array", "items": { "type": "string" }, "description": "Regex strings; matching paths skipped by ABC" },
+    "abc": {
+      "type": "object",
+      "properties": {
+        "budget": { "type": "integer", "minimum": 1 },
+        "allow": { "type": "object", "additionalProperties": { "type": "object", "required": ["max", "why"], "properties": { "max": { "type": "integer" }, "why": { "type": "string", "minLength": 10 } } } }
+      }
+    },
+    "size": {
+      "type": "object",
+      "properties": {
+        "budgets": { "type": "array", "items": { "type": "object", "required": ["label", "dir", "match", "max"], "properties": { "label": { "type": "string" }, "dir": { "type": "string" }, "match": { "type": "string" }, "max": { "type": "integer" }, "mode": { "enum": ["sum", "largest"] } } } },
+        "worker": { "type": "object", "required": ["max"], "properties": { "max": { "type": "integer" }, "wranglerArgs": { "type": "array", "items": { "type": "string" } } } }
+      }
+    }
+  }
+}

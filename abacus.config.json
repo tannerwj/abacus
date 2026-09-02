@@ -1,0 +1,1 @@
+{ "$schema": "./configs/abacus.schema.json", "preset": "typescript", "roots": ["src"], "abc": { "budget": 60, "allow": {} } }
