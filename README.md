@@ -62,6 +62,10 @@ offenders. Wire it into whatever runs your checks.
 
 ## Notes
 
+- pnpm ≥ 10 flags git dependencies for build scripts even though `dist/` is
+  prebuilt. Silence it once per repo in `pnpm-workspace.yaml`:
+  `allowBuilds: { "@tjohnson/abacus": false }`.
+
 - Type-aware lint needs tsconfig `paths` to be relative (`"./src/*"`) and no
   `baseUrl` (tsgolint limitation).
 - Generated or vendored code (e.g. shadcn `components/ui`) goes in
