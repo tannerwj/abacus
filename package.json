@@ -1,6 +1,6 @@
 {
   "name": "@tjohnson/abacus",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Plug-and-play quality gates for TypeScript projects: oxlint presets (type-aware), cyclomatic/ABC complexity budgets, and gzip bundle-size budgets. Presets for plain TypeScript, Cloudflare Workers, and Vite SPAs.",
   "type": "module",
   "license": "MIT",
@@ -23,21 +23,26 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "test": "vitest run",
-    "check": "tsc -p tsconfig.json --noEmit && vitest run && node dist/cli.js abc && oxlint --type-aware src test"
+    "check": "tsc -p tsconfig.json --noEmit && vitest run && node dist/cli.js abc && oxlint --type-aware src test && node dist/cli.js ratchet"
   },
   "peerDependencies": {
+    "oxfmt": ">=0.60.0",
     "oxlint": ">=1.80.0",
     "oxlint-tsgolint": ">=7.0.0",
     "typescript": ">=5.5"
   },
   "peerDependenciesMeta": {
+    "oxfmt": {
+      "optional": true
+    },
     "oxlint-tsgolint": {
       "optional": true
     }
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
-    "oxlint": "^1.80.0",
+    "oxfmt": "0.67.0",
+    "oxlint": "^1.82.0",
     "oxlint-tsgolint": "^7.0.2001",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8"

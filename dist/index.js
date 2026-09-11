@@ -2,3 +2,4 @@ export { measure, scoreSource, scoreProject, reportAbc, functionName } from "./a
 export { measureBudgets, reportSize, gzipSize } from "./size.js";
 export { loadConfig, defaults, CONFIG_FILE } from "./config.js";
 export { init } from "./init.js";
+export { measureRatchet, reportRatchet, countLines } from "./ratchet.js";

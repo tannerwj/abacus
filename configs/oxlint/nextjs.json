@@ -1,0 +1,14 @@
+{
+  "$schema": "../../node_modules/oxlint/configuration_schema.json",
+  "extends": ["./typescript.json"],
+  "plugins": ["typescript", "oxc", "unicorn", "promise", "import", "react", "jsx-a11y", "nextjs"],
+  "settings": { "react": { "version": "19" } },
+  "ignorePatterns": [".next/**", ".open-next/**", "next-env.d.ts", "node_modules/**"],
+  "rules": {
+    "react/react-in-jsx-scope": "off",
+    "react/no-array-index-key": "warn"
+  },
+  "overrides": [
+    { "files": ["app/**/{layout,page,loading,error,not-found,global-error,template,default,route,middleware,instrumentation}.{ts,tsx}", "middleware.ts", "instrumentation*.ts", "next.config.*", "open-next.config.*"], "rules": { "import/no-default-export": "off", "import/no-anonymous-default-export": "off" } }
+  ]
+}

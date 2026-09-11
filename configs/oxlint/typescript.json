@@ -5,6 +5,9 @@
   "rules": {
     "no-unused-vars": ["error", { "argsIgnorePattern": "^_", "varsIgnorePattern": "^_", "caughtErrors": "none" }],
     "typescript/no-explicit-any": "error",
+    "typescript/consistent-type-assertions": ["error", { "assertionStyle": "as", "objectLiteralTypeAssertions": "never" }],
+    "typescript/no-non-null-assertion": "warn",
+    "typescript/no-unnecessary-type-assertion": "warn",
     "typescript/no-floating-promises": ["error", { "ignoreVoid": true }],
     "typescript/no-misused-promises": "error",
     "typescript/await-thenable": "error",
@@ -22,7 +25,7 @@
     "max-lines-per-function": ["warn", { "max": 120, "skipBlankLines": true, "skipComments": true, "IIFEs": true }]
   },
   "overrides": [
-    { "files": ["**/*.test.*", "**/test/**", "**/tests/**", "**/__tests__/**"], "plugins": ["vitest"], "rules": { "max-lines-per-function": "off", "complexity": "off", "no-useless-concat": "off" } },
+    { "files": ["**/*.test.*", "**/test/**", "**/tests/**", "**/__tests__/**"], "plugins": ["vitest"], "rules": { "max-lines-per-function": "off", "complexity": "off", "no-useless-concat": "off", "typescript/no-non-null-assertion": "off", "vitest/no-restricted-vi-methods": ["warn", { "mock": "Module mocking hides the seam; inject the dependency instead." }] } },
     { "files": ["scripts/**"], "rules": { "no-console": "off" } }
   ]
 }

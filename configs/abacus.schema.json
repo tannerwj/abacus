@@ -4,7 +4,7 @@
   "type": "object",
   "properties": {
     "$schema": { "type": "string" },
-    "preset": { "enum": ["typescript", "cloudflare-worker", "vite-spa"] },
+    "preset": { "enum": ["typescript", "cloudflare-worker", "vite-spa", "nextjs"] },
     "roots": { "type": "array", "items": { "type": "string" }, "description": "Source roots scanned for ABC scores" },
     "exclude": { "type": "array", "items": { "type": "string" }, "description": "Regex strings; matching paths skipped by ABC" },
     "abc": {
@@ -19,6 +19,21 @@
       "properties": {
         "budgets": { "type": "array", "items": { "type": "object", "required": ["label", "dir", "match", "max"], "properties": { "label": { "type": "string" }, "dir": { "type": "string" }, "match": { "type": "string" }, "max": { "type": "integer" }, "mode": { "enum": ["sum", "largest"] } } } },
         "worker": { "type": "object", "required": ["max"], "properties": { "max": { "type": "integer" }, "wranglerArgs": { "type": "array", "items": { "type": "string" } } } }
+      }
+    },
+    "ratchet": {
+      "type": "object",
+      "properties": {
+        "file": { "type": "string", "description": "Snapshot file written by `abacus ratchet --write`" },
+        "metrics": {
+          "type": "object",
+          "properties": {
+            "loc": { "type": "object", "required": ["roots"], "properties": { "roots": { "type": "array", "items": { "type": "string" } }, "slack": { "type": "number", "minimum": 0 } } },
+            "oxlintWarnings": { "type": "boolean" },
+            "abcMax": { "type": "boolean" },
+            "comments": { "type": "object", "required": ["roots"], "properties": { "roots": { "type": "array", "items": { "type": "string" } }, "max": { "type": "number", "minimum": 0 } } }
+          }
+        }
       }
     }
   }
