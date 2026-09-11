@@ -1,0 +1,1 @@
+{ "preset": "typescript", "roots": ["src"], "ratchet": { "file": "abacus.ratchet.json", "metrics": { "loc": { "roots": ["src"], "slack": 0.1 }, "abcMax": true, "comments": { "roots": ["src"], "max": 0.7 } } } }

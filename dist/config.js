@@ -13,10 +13,13 @@ export function defaults(preset) {
         roots: ["src", "scripts"],
         exclude: ["\\.d\\.ts$", "\\.test\\.tsx?$", "/components/ui/"],
         abc: { budget: 60, allow: {} },
-        size: { budgets: [] }
+        size: { budgets: [] },
+        ratchet: { file: "abacus.ratchet.json", metrics: { loc: { roots: ["src"], slack: 0.02 }, oxlintWarnings: true, abcMax: true, comments: { roots: ["src"], max: 0.3 } } }
     };
     if (preset === "cloudflare-worker")
         base.size.worker = { max: 400 * KB };
+    if (preset === "nextjs")
+        base.exclude.push("/components/ui/", "^\\.next/", "^\\.open-next/", "next-env\\.d\\.ts$");
     if (preset === "vite-spa" || preset === "cloudflare-worker") {
         base.size.budgets = [
             { label: "SPA JS (all chunks, gzip)", dir: "dist/client/assets", match: "\\.js$", max: 280 * KB },
@@ -37,6 +40,7 @@ export function loadConfig(cwd = process.cwd()) {
         roots: raw.roots ?? base.roots,
         exclude: raw.exclude ?? base.exclude,
         abc: { budget: raw.abc?.budget ?? base.abc.budget, allow: raw.abc?.allow ?? {} },
-        size: { budgets: raw.size?.budgets ?? base.size.budgets, worker: raw.size?.worker ?? base.size.worker }
+        size: { budgets: raw.size?.budgets ?? base.size.budgets, worker: raw.size?.worker ?? base.size.worker },
+        ratchet: { file: raw.ratchet?.file ?? base.ratchet.file, metrics: raw.ratchet?.metrics ?? base.ratchet.metrics }
     };
 }

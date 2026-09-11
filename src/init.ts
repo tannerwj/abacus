@@ -10,8 +10,10 @@ import { CONFIG_FILE, defaults, type Preset } from "./config.js";
 const OXLINT_PRESET: Record<Preset, string> = {
   "typescript": "@tjohnson/abacus/configs/oxlint/typescript.json",
   "cloudflare-worker": "@tjohnson/abacus/configs/oxlint/cloudflare-worker.json",
-  "vite-spa": "@tjohnson/abacus/configs/oxlint/vite-spa.json"
+  "vite-spa": "@tjohnson/abacus/configs/oxlint/vite-spa.json",
+  "nextjs": "@tjohnson/abacus/configs/oxlint/nextjs.json"
 };
+const OXFMT_TEMPLATE = new URL("../configs/oxfmt.jsonc", import.meta.url);
 
 function writeIfMissing(file: string, content: string): boolean {
   if (fs.existsSync(file)) { console.log(`  skip  ${path.basename(file)} (exists)`); return false; }
@@ -27,15 +29,16 @@ export function init(preset: Preset, cwd = process.cwd()): void {
   writeIfMissing(path.join(cwd, ".oxlintrc.json"), `${JSON.stringify({
     $schema: "./node_modules/oxlint/configuration_schema.json",
     extends: [`./node_modules/${OXLINT_PRESET[preset]}`],
-    ignorePatterns: ["dist/**", "node_modules/**", ".wrangler/**"],
+    ignorePatterns: ["dist/**", "node_modules/**", ".wrangler/**", ...(preset === "nextjs" ? [".next/**", ".open-next/**"] : [])],
     rules: {},
     overrides: []
   }, null, 2)}\n`);
+  writeIfMissing(path.join(cwd, ".oxfmtrc.jsonc"), fs.readFileSync(OXFMT_TEMPLATE, "utf8"));
   const pkgFile = path.join(cwd, "package.json");
   if (fs.existsSync(pkgFile)) {
     const pkg = JSON.parse(fs.readFileSync(pkgFile, "utf8")) as { scripts?: Record<string, string> };
     pkg.scripts ??= {};
-    const wanted: Record<string, string> = { lint: "oxlint --type-aware", abc: "abacus abc", size: "abacus size" };
+    const wanted: Record<string, string> = { lint: "oxlint --type-aware", fmt: "abacus fmt", abc: "abacus abc", size: "abacus size", ratchet: "abacus ratchet" };
     let changed = false;
     for (const [name, cmd] of Object.entries(wanted)) {
       if (pkg.scripts[name]) { console.log(`  keep  scripts.${name} = ${pkg.scripts[name]}`); continue; }
@@ -45,8 +48,8 @@ export function init(preset: Preset, cwd = process.cwd()): void {
   }
   console.log(`
 Next:
-  1. pnpm add -D oxlint oxlint-tsgolint   (type-aware lint)
-  2. add "pnpm lint && pnpm abc" to your check script; "pnpm size" after build
+  1. pnpm add -D oxlint oxlint-tsgolint oxfmt   (type-aware lint + formatter)
+  2. add "pnpm lint && pnpm abc && pnpm ratchet" to your check script; "pnpm size" after build; \`abacus ratchet --write\` once to snapshot
   3. run \`abacus abc --top 20\` and split (or allow-list with a reason) anything over budget
   4. tsconfig paths must be relative ("./src/*") and without baseUrl for tsgolint`);
 }
