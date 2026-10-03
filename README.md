@@ -103,6 +103,14 @@ the working tree for leaked credentials, exits 1 on findings. Secret values are
 never printed — findings report file, line, and rule only. `abacus init` writes
 a `.gitleaks.toml` extending the default rules; add known false positives there.
 
+## TypeScript
+
+`abacus tsc` runs `tsc --noEmit` (the project's own tsc when installed, else the
+TypeScript bundled with abacus) and exits 1 on any type error. It also prints a
+strictness audit — the high-value flags beyond `strict` (`noUncheckedIndexedAccess`,
+`exactOptionalPropertyTypes`, `noImplicitOverride`, …) — as advisory only.
+Adopting a flag is the repo's decision, recorded in its tsconfig.json.
+
 ## What it deliberately is not
 
 No dashboards, no history, no CI plugins. It exits non-zero and prints the
