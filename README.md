@@ -120,6 +120,15 @@ fragile and signal that shared code wants its own module. `abacus init` writes
 a `.dependency-cruiser.cjs`; exempt intentional cycles there rather than
 ignoring the gate.
 
+## Duplication
+
+`abacus dupes` runs [jscpd](https://github.com/kucherenko/jscpd) (bundled)
+over `src/` and exits 1 when copy-paste duplication exceeds 5% of the codebase
+(min 5 lines / 50 tokens per clone). The report lists every clone pair with
+file and line ranges, so the fix — extracting the shared logic — is obvious.
+`abacus init` writes a `.jscpd.json`; adjust `threshold` or `ignore` patterns
+there. Test files and fixtures are ignored by default.
+
 ## What it deliberately is not
 
 No dashboards, no history, no CI plugins. It exits non-zero and prints the

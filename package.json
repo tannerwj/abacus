@@ -48,9 +48,10 @@
   },
   "dependencies": {
     "@b12k/gitleaks": "^8.30.1",
+    "dependency-cruiser": "^18.5.0",
+    "jscpd": "^5.4.0",
     "knip": "^6.39.0",
-    "typescript": "^5.9.3",
-    "dependency-cruiser": "^18.5.0"
+    "typescript": "^5.9.3"
   },
   "engines": {
     "node": ">=20"

@@ -17,6 +17,7 @@ const OXLINT_PRESET: Record<Preset, string> = {
 const OXFMT_TEMPLATE = new URL("../configs/oxfmt.jsonc", import.meta.url);
 const GITLEAKS_TEMPLATE = new URL("../configs/gitleaks.toml", import.meta.url);
 const DEPCRUISE_TEMPLATE = new URL("../configs/dependency-cruiser.cjs", import.meta.url);
+const JSCPD_TEMPLATE = new URL("../configs/jscpd.json", import.meta.url);
 
 function writeIfMissing(file: string, content: string): boolean {
   if (fs.existsSync(file)) { console.log(`  skip  ${path.basename(file)} (exists)`); return false; }
@@ -40,6 +41,7 @@ export function init(preset: Preset, cwd = process.cwd()): void {
   writeIfMissing(path.join(cwd, "knip.json"), knipConfig(cwd));
   writeIfMissing(path.join(cwd, ".gitleaks.toml"), fs.readFileSync(GITLEAKS_TEMPLATE, "utf8"));
   writeIfMissing(path.join(cwd, ".dependency-cruiser.cjs"), fs.readFileSync(DEPCRUISE_TEMPLATE, "utf8"));
+  writeIfMissing(path.join(cwd, ".jscpd.json"), fs.readFileSync(JSCPD_TEMPLATE, "utf8"));
   const pkgFile = path.join(cwd, "package.json");
   if (fs.existsSync(pkgFile)) {
     const pkg = JSON.parse(fs.readFileSync(pkgFile, "utf8")) as { scripts?: Record<string, string> };
