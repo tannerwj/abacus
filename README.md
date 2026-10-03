@@ -86,6 +86,15 @@ Raising the snapshot is a reviewed diff to `abacus.ratchet.json`, not a flag.
 with the template in `configs/oxfmt.jsonc` (100 cols, double quotes, semicolons,
 trailing commas). Edit `.oxfmtrc.jsonc` in your repo; oxfmt reads it automatically.
 
+## Dead code
+
+`abacus deadcode` wraps [knip](https://knip.dev) (bundled, zero extra installs):
+unused exports, files, types, and dependencies. It exits 1 when anything is
+found. `abacus init` writes a `knip.json` with entry points auto-detected from
+package.json, wrangler config, and common test/script/config patterns; edit it
+in your repo for project-specific entries (e.g. string-based lazy imports like
+`lazyView("./js/views/x.js", ...)`, which knip cannot trace).
+
 ## What it deliberately is not
 
 No dashboards, no history, no CI plugins. It exits non-zero and prints the

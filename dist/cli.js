@@ -2,6 +2,7 @@
 import { spawnSync } from "node:child_process";
 import { reportAbc } from "./abc.js";
 import { loadConfig } from "./config.js";
+import { reportDeadcode } from "./deadcode.js";
 import { init } from "./init.js";
 import { localBin, reportRatchet } from "./ratchet.js";
 import { reportSize } from "./size.js";
@@ -15,6 +16,7 @@ const HELP = `abacus — quality gates for TypeScript projects
   abacus ratchet [--write]                                              LOC / comment ratio / max ABC / oxlint count vs snapshot (exit 1 if grown)
   abacus lint [paths…]                                                  oxlint --type-aware with the repo's .oxlintrc.json
   abacus fmt [--check] [paths…]                                         oxfmt (write by default) with the repo's .oxfmtrc.jsonc
+  abacus deadcode                                                       unused exports/files/types/deps via knip (exit 1 if found)
   abacus check                                                          lint + abc + ratchet (add size after your build step)
 `;
 const sh = (bin, args) => spawnSync(localBin(bin), args, { stdio: "inherit" }).status ?? 1;
@@ -26,6 +28,7 @@ const COMMANDS = {
     ratchet: () => (reportRatchet(loadConfig(), rest.includes("--write")) ? 0 : 1),
     lint: () => sh("oxlint", ["--type-aware", ...(rest.length ? rest : ["."])]),
     fmt: () => sh("oxfmt", rest.length ? rest : ["."]),
+    deadcode: () => (reportDeadcode(process.cwd()) ? 0 : 1),
     check: () => { const lint = sh("oxlint", ["--type-aware", "."]); const abc = reportAbc(loadConfig(), top()) ? 0 : 1; const ratchet = reportRatchet(loadConfig(), false) ? 0 : 1; return lint || abc || ratchet; },
     help: () => { console.log(HELP); return 0; }
 };
