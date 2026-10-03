@@ -111,6 +111,15 @@ strictness audit — the high-value flags beyond `strict` (`noUncheckedIndexedAc
 `exactOptionalPropertyTypes`, `noImplicitOverride`, …) — as advisory only.
 Adopting a flag is the repo's decision, recorded in its tsconfig.json.
 
+## Circular dependencies
+
+`abacus cycles` runs [dependency-cruiser](https://github.com/sverweij/dependency-cruiser)
+(bundled) with the `no-circular` rule over `src/` and exits 1 when any import
+cycle is found. Cycles are a code smell — they make module evaluation order
+fragile and signal that shared code wants its own module. `abacus init` writes
+a `.dependency-cruiser.cjs`; exempt intentional cycles there rather than
+ignoring the gate.
+
 ## What it deliberately is not
 
 No dashboards, no history, no CI plugins. It exits non-zero and prints the
