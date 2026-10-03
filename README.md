@@ -129,6 +129,13 @@ file and line ranges, so the fix — extracting the shared logic — is obvious.
 `abacus init` writes a `.jscpd.json`; adjust `threshold` or `ignore` patterns
 there. Test files and fixtures are ignored by default.
 
+## Todos
+
+`abacus todos` scans source files for TODO/FIXME/HACK/XXX comments with dates
+(`TODO(2026-12-01)`, `FIXME: 2026-12-01`, …) and exits 1 when any date is in
+the past. A deadline that passes silently is a lie — resolve it or move the
+date. Undated TODOs are reported but never fail.
+
 ## What it deliberately is not
 
 No dashboards, no history, no CI plugins. It exits non-zero and prints the
