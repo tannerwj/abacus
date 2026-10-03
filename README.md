@@ -95,6 +95,14 @@ package.json, wrangler config, and common test/script/config patterns; edit it
 in your repo for project-specific entries (e.g. string-based lazy imports like
 `lazyView("./js/views/x.js", ...)`, which knip cannot trace).
 
+## Secrets
+
+`abacus secrets` wraps [gitleaks](https://github.com/gitleaks/gitleaks) (bundled
+via `@b12k/gitleaks`: downloads the official release, verifies sha256): scans
+the working tree for leaked credentials, exits 1 on findings. Secret values are
+never printed — findings report file, line, and rule only. `abacus init` writes
+a `.gitleaks.toml` extending the default rules; add known false positives there.
+
 ## What it deliberately is not
 
 No dashboards, no history, no CI plugins. It exits non-zero and prints the
