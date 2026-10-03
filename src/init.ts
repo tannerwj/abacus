@@ -6,6 +6,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { CONFIG_FILE, defaults, type Preset } from "./config.js";
+import { knipConfig } from "./deadcode.js";
 
 const OXLINT_PRESET: Record<Preset, string> = {
   "typescript": "@tjohnson/abacus/configs/oxlint/typescript.json",
@@ -34,6 +35,7 @@ export function init(preset: Preset, cwd = process.cwd()): void {
     overrides: []
   }, null, 2)}\n`);
   writeIfMissing(path.join(cwd, ".oxfmtrc.jsonc"), fs.readFileSync(OXFMT_TEMPLATE, "utf8"));
+  writeIfMissing(path.join(cwd, "knip.json"), knipConfig(cwd));
   const pkgFile = path.join(cwd, "package.json");
   if (fs.existsSync(pkgFile)) {
     const pkg = JSON.parse(fs.readFileSync(pkgFile, "utf8")) as { scripts?: Record<string, string> };
@@ -50,6 +52,6 @@ export function init(preset: Preset, cwd = process.cwd()): void {
 Next:
   1. pnpm add -D oxlint oxlint-tsgolint oxfmt   (type-aware lint + formatter)
   2. add "pnpm lint && pnpm abc && pnpm ratchet" to your check script; "pnpm size" after build; \`abacus ratchet --write\` once to snapshot
-  3. run \`abacus abc --top 20\` and split (or allow-list with a reason) anything over budget
+  3. run \`abacus deadcode\` and remove (or exempt in knip.json) anything it flags; run \`abacus abc --top 20\` and split (or allow-list with a reason) anything over budget
   4. tsconfig paths must be relative ("./src/*") and without baseUrl for tsgolint`);
 }
