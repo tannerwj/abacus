@@ -4,6 +4,7 @@ import { reportAbc } from "./abc.js";
 import { loadConfig, type Preset } from "./config.js";
 import { reportDeadcode } from "./deadcode.js";
 import { reportSecrets } from "./secrets.js";
+import { reportTsc } from "./tsc.js";
 import { init } from "./init.js";
 import { localBin, reportRatchet } from "./ratchet.js";
 import { reportSize } from "./size.js";
@@ -21,6 +22,7 @@ const HELP = `abacus — quality gates for TypeScript projects
   abacus fmt [--check] [paths…]                                         oxfmt (write by default) with the repo's .oxfmtrc.jsonc
   abacus deadcode                                                       unused exports/files/types/deps via knip (exit 1 if found)
   abacus secrets                                                        leaked credentials via gitleaks (exit 1 if found)
+  abacus tsc                                                            tsc --noEmit zero-error gate + strictness audit
   abacus check                                                          lint + abc + ratchet (add size after your build step)
 `;
 
@@ -35,6 +37,7 @@ const COMMANDS: Record<string, () => number> = {
   fmt: () => sh("oxfmt", rest.length ? rest : ["."]),
   deadcode: () => (reportDeadcode(process.cwd()) ? 0 : 1),
   secrets: () => (reportSecrets(process.cwd()) ? 0 : 1),
+  tsc: () => (reportTsc(process.cwd()) ? 0 : 1),
   check: () => { const lint = sh("oxlint", ["--type-aware", "."]); const abc = reportAbc(loadConfig(), top()) ? 0 : 1; const ratchet = reportRatchet(loadConfig(), false) ? 0 : 1; return lint || abc || ratchet; },
   help: () => { console.log(HELP); return 0; }
 };
