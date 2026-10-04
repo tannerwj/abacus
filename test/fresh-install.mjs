@@ -37,6 +37,80 @@ function run(bin, args, cwd, expected = 0) {
 // Invoking pnpm's JS CLI directly also works on Windows, where .cmd is a shell shim.
 const runPnpm = (args, cwd) => run(process.execPath, [pnpmCli, ...args], cwd);
 
+function verifyLargePackedJson(cli) {
+  const fixture = path.join(temp, "large JSON consumer with spaces");
+  const sourceFile = path.join("src", "expired-pipe-output.ts");
+  const findingCount = 5000;
+  const finalDate = "1999-12-31";
+  fs.mkdirSync(path.join(fixture, "src"), { recursive: true });
+  fs.writeFileSync(path.join(fixture, "abacus.config.json"), JSON.stringify({ roots: ["src"], check: { gates: ["todos"] } }));
+  fs.writeFileSync(path.join(fixture, sourceFile), Array.from({ length: findingCount }, (_, index) =>
+    `// TODO(${index === findingCount - 1 ? finalDate : "2000-01-01"}): packed-json-finding-${index + 1}\n`
+  ).join(""));
+
+  for (const [name, version, enforcement] of [["old", "1.0.0", "block"], ["new", "1.1.0", "observe"]]) {
+    const packFile = path.join(fixture, `${name}-policy.json`);
+    fs.writeFileSync(packFile, JSON.stringify({
+      schemaVersion: 1, name: "packed-output-regression", version,
+      compatibility: { adapterVersion: 1, evidenceSchemaVersion: 1 }, nativeFiles: [],
+      checks: [{ id: "expired-todos", gate: "todos", required: true, enforcement, severity: "error", rationale: "Exercise complete packed CLI output" }],
+    }));
+    const digest = run(process.execPath, [cli, "policy-digest", "--path", packFile], fixture).trim();
+    fs.writeFileSync(path.join(fixture, `${name}-pin.json`), JSON.stringify({ path: packFile, version, digest }));
+  }
+
+  const readLargeJson = (args, expected) => {
+    // Keep real pipes: redirecting stdout to a file would hide premature process.exit.
+    const result = spawnSync(process.execPath, [cli, ...args], {
+      cwd: fixture, env, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: 30_000, maxBuffer: 16 * 1024 * 1024,
+    });
+    assert.ifError(result.error);
+    assert.equal(result.signal, null, `${args[0]} must finish normally`);
+    assert.equal(result.status, expected, `${args[0]} must preserve its exit code`);
+    assert.equal(result.stderr, "", `${args[0]} must keep stderr empty`);
+    const json = JSON.parse(result.stdout);
+    assert.ok(Buffer.byteLength(result.stdout, "utf8") > 512 * 1024, `${args[0]} must exercise more than 512 KiB of normalized JSON`);
+    return json;
+  };
+  const assertAllFindings = (evidence, id, enforcement, blocking) => {
+    assert.equal(evidence.checks.length, 1);
+    const [check] = evidence.checks;
+    assert.equal(check.id, id);
+    assert.equal(check.gate, "todos");
+    assert.equal(check.outcome, "fail");
+    assert.equal(check.enforcement, enforcement);
+    assert.equal(check.blocking, blocking);
+    assert.equal(check.scope.scanned, 1);
+    assert.deepEqual(check.counts, { findings: findingCount, waived: 0, active: findingCount });
+    assert.equal(check.metrics.dated, findingCount);
+    assert.equal(check.metrics.undated, 0);
+    assert.equal(check.findings.length, findingCount);
+    assert.deepEqual(check.findings.map((finding) => finding.subject), Array.from({ length: findingCount }, (_, index) => `${sourceFile}:${index + 1} TODO`));
+    assert.ok(check.findings.every((finding, index) => finding.ruleId === "todos/expired" && finding.severity === "error"
+      && finding.message === `Deadline ${index === findingCount - 1 ? finalDate : "2000-01-01"} expired`));
+    // Comment text is intentionally omitted from normalized evidence; the last line/date is its marker.
+    assert.equal(check.findings.at(-1).subject, `${sourceFile}:${findingCount} TODO`);
+    assert.equal(check.findings.at(-1).message, `Deadline ${finalDate} expired`);
+  };
+
+  const evidence = readLargeJson(["check", "--json", "--at", "2026-01-01T00:00:00.000Z"], 1);
+  assert.equal(evidence.clean, false);
+  assertAllFindings(evidence, "todos", "block", true);
+  const upgrade = readLargeJson(["preview", "--from", "old-pin.json", "--to", "new-pin.json", "--json", "--at", "2026-01-01T00:00:00.000Z"], 0);
+  assert.equal(upgrade.preview.cleanBefore, false);
+  assert.equal(upgrade.preview.cleanAfter, true);
+  assert.equal(upgrade.before.clean, false);
+  assert.equal(upgrade.after.clean, true);
+  assertAllFindings(upgrade.before, "expired-todos", "block", true);
+  assertAllFindings(upgrade.after, "expired-todos", "observe", false);
+  assert.equal(upgrade.before.source.treeDigest, upgrade.after.source.treeDigest);
+  assert.equal(upgrade.before.evaluatedAt, upgrade.after.evaluatedAt);
+  assert.equal(upgrade.preview.enforcementChanges.length, 1);
+  assert.deepEqual(upgrade.preview.addedFindings, []);
+  assert.deepEqual(upgrade.preview.resolvedFindings, []);
+  assert.deepEqual(upgrade.preview.newBlockers, []);
+}
+
 try {
   fs.cpSync(root, checkout, { recursive: true, filter: (file) => !["node_modules", ".git"].includes(path.basename(file)) });
   const lock = path.join(checkout, "pnpm-lock.yaml");
@@ -113,6 +187,8 @@ try {
   assert.equal(upgrade.preview.cleanAfter, true);
   assert.ok(upgrade.preview.thresholdChanges.length > 0);
   assert.ok(upgrade.preview.enforcementChanges.length > 0);
+  console.log("Packed consumer: complete large failing check and successful preview JSON through pipes");
+  verifyLargePackedJson(cli);
   const consumerLock = path.join(consumer, "pnpm-lock.yaml");
   const consumerBefore = fingerprint(consumerLock);
   runPnpm(["install", "--frozen-lockfile", "--store-dir", store], consumer);
