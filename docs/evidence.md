@@ -33,6 +33,11 @@ Gitleaks measurements come from its pinned version's scan log; a missing count
 is incomplete. ABC includes files with no functions as legitimate scanned files.
 TypeScript strictness flags and undated TODOs remain advisory.
 
+Secret scans use the selected repository as their working directory and native
+source `.`. Finding paths are repository-relative, so exact root-anchored path
+allowlists can exempt a documented fixture without suppressing nested copies.
+Keep fixture path and exact value conditions joined with `AND`.
+
 ## What these hashes do and do not prove
 
 The tree digest includes source, tests, repository configuration and existing
