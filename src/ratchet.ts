@@ -67,18 +67,53 @@ export function measureRatchet(config: AbacusConfig, cwd = process.cwd()): Metri
   return metrics;
 }
 
+function enabledMetricKeys(config: AbacusConfig): string[] {
+  const m = config.ratchet.metrics;
+  return [
+    ...(m.loc?.roots ?? []).map((root) => `loc ${root}`),
+    ...(m.comments?.roots ?? []).map((root) => `comments ${root}`),
+    ...(m.abcMax ? ["abcMax"] : []),
+    ...(m.oxlintWarnings ? ["oxlintWarnings"] : [])
+  ];
+}
+
+function readSnapshot(file: string, keys: string[]): Snapshot | string {
+  if (!fs.existsSync(file)) return "is missing";
+  let snapshot: unknown;
+  try { snapshot = JSON.parse(fs.readFileSync(file, "utf8")); }
+  catch { return "could not be read as valid JSON"; }
+  if (typeof snapshot !== "object" || snapshot === null || Array.isArray(snapshot)) return "must be a JSON object";
+  if (Object.keys(snapshot).length === 0) return "is empty";
+  const validated: Snapshot = {};
+  const invalid: string[] = [];
+  for (const [key, value] of Object.entries(snapshot)) {
+    if (typeof value !== "number" || !Number.isFinite(value) || value < 0) invalid.push(key);
+    else validated[key] = value;
+  }
+  if (invalid.length) return `has invalid metric values: ${invalid.join(", ")}`;
+  const missing = keys.filter((key) => !Object.hasOwn(validated, key));
+  if (missing.length) return `is missing enabled metrics: ${missing.join(", ")}`;
+  return validated;
+}
+
 export function reportRatchet(config: AbacusConfig, write: boolean, cwd = process.cwd()): boolean {
   const file = path.join(cwd, config.ratchet.file);
+  const keys = enabledMetricKeys(config);
+  if (keys.length === 0) { console.error("No ratchet metrics enabled. Configure metrics before creating or checking a snapshot."); return false; }
+  const previous = write ? undefined : readSnapshot(file, keys);
+  if (typeof previous === "string") {
+    console.error(`Ratchet snapshot ${config.ratchet.file} ${previous}. Run \`abacus ratchet --write\` or \`--update\` as a deliberate, reviewed decision to create or replace it.`);
+    return false;
+  }
   const metrics = measureRatchet(config, cwd);
-  let snapshot: Snapshot = fs.existsSync(file) ? (JSON.parse(fs.readFileSync(file, "utf8")) as Snapshot) : {};
-  if (write || Object.keys(snapshot).length === 0) {
-    snapshot = Object.fromEntries(metrics.map((x) => [x.key, x.value]));
+  const snapshot = previous ?? Object.fromEntries(metrics.map((x) => [x.key, x.value]));
+  if (write) {
     fs.writeFileSync(file, `${JSON.stringify(snapshot, null, 2)}\n`);
-    console.log(`${write ? "wrote" : "no snapshot yet — wrote"} ${config.ratchet.file}; fixed \`max\` ceilings still apply\n`);
+    console.log(`wrote ${config.ratchet.file}; fixed \`max\` ceilings still apply\n`);
   }
   let failed = 0, down = 0;
   for (const x of metrics) {
-    const prev = snapshot[x.key] ?? x.value;
+    const prev = snapshot[x.key];
     const ceiling = Math.min(prev * (1 + x.slack), x.max ?? Infinity);
     const mark = x.value > ceiling ? "✗" : x.value < prev ? "↓" : " ";
     if (x.value > ceiling) failed++; else if (x.value < prev) down++;

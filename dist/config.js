@@ -5,11 +5,15 @@
  */
 import fs from "node:fs";
 import path from "node:path";
+export const CHECK_GATES = ["lint", "abc", "ratchet", "tsc", "deadcode", "secrets", "cycles", "dupes", "todos", "size"];
+/** Source gates can run before a build. Size remains an explicit post-build gate. */
+export const SOURCE_GATES = CHECK_GATES.filter((gate) => gate !== "size");
 export const CONFIG_FILE = "abacus.config.json";
 const KB = 1024;
 export function defaults(preset) {
     const base = {
         preset,
+        check: { gates: ["lint", "abc", "ratchet"] },
         roots: ["src", "scripts"],
         exclude: ["\\.d\\.ts$", "\\.test\\.tsx?$", "/components/ui/"],
         abc: { budget: 60, allow: {} },
@@ -37,10 +41,23 @@ export function loadConfig(cwd = process.cwd()) {
     const base = defaults(raw.preset ?? "typescript");
     return {
         preset: raw.preset ?? base.preset,
+        check: loadCheck(raw.check, base.check),
         roots: raw.roots ?? base.roots,
         exclude: raw.exclude ?? base.exclude,
         abc: { budget: raw.abc?.budget ?? base.abc.budget, allow: raw.abc?.allow ?? {} },
         size: { budgets: raw.size?.budgets ?? base.size.budgets, worker: raw.size?.worker ?? base.size.worker },
         ratchet: { file: raw.ratchet?.file ?? base.ratchet.file, metrics: raw.ratchet?.metrics ?? base.ratchet.metrics }
     };
+}
+export function validateCheckGates(gates) {
+    if (!Array.isArray(gates) || gates.length === 0 || !gates.every(isCheckGate)) {
+        throw new Error(`check.gates must be a nonempty list of: ${CHECK_GATES.join(", ")}`);
+    }
+    return [...new Set(gates)];
+}
+function isCheckGate(gate) {
+    return typeof gate === "string" && CHECK_GATES.some((known) => known === gate);
+}
+function loadCheck(raw, base) {
+    return { gates: validateCheckGates(raw?.gates ?? base.gates) };
 }

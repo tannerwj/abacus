@@ -5,7 +5,7 @@
  */
 import fs from "node:fs";
 import path from "node:path";
-import { CONFIG_FILE, defaults, type Preset } from "./config.js";
+import { CONFIG_FILE, defaults, SOURCE_GATES, type Preset } from "./config.js";
 import { knipConfig } from "./deadcode.js";
 
 const OXLINT_PRESET: Record<Preset, string> = {
@@ -26,9 +26,11 @@ function writeIfMissing(file: string, content: string): boolean {
   return true;
 }
 
-export function init(preset: Preset, cwd = process.cwd()): void {
+export function init(preset: Preset, cwd = process.cwd(), options: { all?: boolean } = {}): void {
+  if (!["typescript", "cloudflare-worker", "vite-spa", "nextjs"].includes(preset)) throw new Error(`Unknown preset: ${preset}`);
   console.log(`abacus init — preset ${preset}\n`);
   const config = defaults(preset);
+  if (options.all) config.check.gates = [...SOURCE_GATES];
   writeIfMissing(path.join(cwd, CONFIG_FILE), `${JSON.stringify({ $schema: "./node_modules/@tjohnson/abacus/configs/abacus.schema.json", ...config }, null, 2)}\n`);
   writeIfMissing(path.join(cwd, ".oxlintrc.json"), `${JSON.stringify({
     $schema: "./node_modules/oxlint/configuration_schema.json",
@@ -46,7 +48,7 @@ export function init(preset: Preset, cwd = process.cwd()): void {
   if (fs.existsSync(pkgFile)) {
     const pkg = JSON.parse(fs.readFileSync(pkgFile, "utf8")) as { scripts?: Record<string, string> };
     pkg.scripts ??= {};
-    const wanted: Record<string, string> = { lint: "oxlint --type-aware", fmt: "abacus fmt", abc: "abacus abc", size: "abacus size", ratchet: "abacus ratchet" };
+    const wanted: Record<string, string> = { lint: "oxlint --type-aware", fmt: "abacus fmt", abc: "abacus abc", size: "abacus size", ratchet: "abacus ratchet", tsc: "abacus tsc", deadcode: "abacus deadcode", secrets: "abacus secrets", cycles: "abacus cycles", dupes: "abacus dupes", todos: "abacus todos", check: "abacus check" };
     let changed = false;
     for (const [name, cmd] of Object.entries(wanted)) {
       if (pkg.scripts[name]) { console.log(`  keep  scripts.${name} = ${pkg.scripts[name]}`); continue; }
@@ -57,7 +59,8 @@ export function init(preset: Preset, cwd = process.cwd()): void {
   console.log(`
 Next:
   1. pnpm add -D oxlint oxlint-tsgolint oxfmt   (type-aware lint + formatter)
-  2. add "pnpm lint && pnpm abc && pnpm ratchet" to your check script; "pnpm size" after build; \`abacus ratchet --write\` once to snapshot
-  3. run \`abacus deadcode\` and remove (or exempt in knip.json) anything it flags; run \`abacus abc --top 20\` and split (or allow-list with a reason) anything over budget
-  4. tsconfig paths must be relative ("./src/*") and without baseUrl for tsgolint`);
+  2. run \`abacus ratchet --write\` once and commit the baseline; normal checks never create or repair it
+  3. use \`abacus check\` in your check script; default gates: lint, abc, ratchet. Opt in to tsc, deadcode, secrets, cycles, dupes, todos with config check.gates or \`abacus check --all\`; \`abacus init --all\` selects them in a new config
+  4. run \`pnpm size\` (or \`abacus check --with-size\`) after build; TypeScript strictness advice does not fail the tsc gate
+  5. tsconfig paths must be relative ("./src/*") and without baseUrl for tsgolint`);
 }

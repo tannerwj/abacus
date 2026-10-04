@@ -8,6 +8,11 @@ import path from "node:path";
 
 export type Preset = "typescript" | "cloudflare-worker" | "vite-spa" | "nextjs";
 
+export const CHECK_GATES = ["lint", "abc", "ratchet", "tsc", "deadcode", "secrets", "cycles", "dupes", "todos", "size"] as const;
+export type CheckGate = typeof CHECK_GATES[number];
+/** Source gates can run before a build. Size remains an explicit post-build gate. */
+export const SOURCE_GATES: CheckGate[] = CHECK_GATES.filter((gate) => gate !== "size");
+
 export interface SizeBudget {
   label: string;
   /** Directory holding built assets, relative to the repo root. */
@@ -18,6 +23,8 @@ export interface SizeBudget {
   max: number;
   /** `sum` (default) adds every matching file; `largest` gates the biggest single file. */
   mode?: "sum" | "largest";
+  /** Permit no matching built files for an optional asset budget (default false). */
+  allowEmpty?: boolean;
 }
 
 export interface RatchetConfig {
@@ -37,6 +44,8 @@ export interface RatchetConfig {
 
 export interface AbacusConfig {
   preset: Preset;
+  /** Gates selected by `abacus check`; new source gates are opt-in. */
+  check: { gates: CheckGate[] };
   /** Source roots scanned for ABC scores. */
   roots: string[];
   /** Regex strings; matching paths are skipped by the ABC scan (generated/vendored code). */
@@ -60,6 +69,7 @@ const KB = 1024;
 export function defaults(preset: Preset): AbacusConfig {
   const base: AbacusConfig = {
     preset,
+    check: { gates: ["lint", "abc", "ratchet"] },
     roots: ["src", "scripts"],
     exclude: ["\\.d\\.ts$", "\\.test\\.tsx?$", "/components/ui/"],
     abc: { budget: 60, allow: {} },
@@ -85,10 +95,26 @@ export function loadConfig(cwd = process.cwd()): AbacusConfig {
   const base = defaults(raw.preset ?? "typescript");
   return {
     preset: raw.preset ?? base.preset,
+    check: loadCheck(raw.check, base.check),
     roots: raw.roots ?? base.roots,
     exclude: raw.exclude ?? base.exclude,
     abc: { budget: raw.abc?.budget ?? base.abc.budget, allow: raw.abc?.allow ?? {} },
     size: { budgets: raw.size?.budgets ?? base.size.budgets, worker: raw.size?.worker ?? base.size.worker },
     ratchet: { file: raw.ratchet?.file ?? base.ratchet.file, metrics: raw.ratchet?.metrics ?? base.ratchet.metrics }
   };
+}
+
+export function validateCheckGates(gates: unknown): CheckGate[] {
+  if (!Array.isArray(gates) || gates.length === 0 || !gates.every(isCheckGate)) {
+    throw new Error(`check.gates must be a nonempty list of: ${CHECK_GATES.join(", ")}`);
+  }
+  return [...new Set(gates)];
+}
+
+function isCheckGate(gate: unknown): gate is CheckGate {
+  return typeof gate === "string" && CHECK_GATES.some((known) => known === gate);
+}
+
+function loadCheck(raw: AbacusConfig["check"] | undefined, base: AbacusConfig["check"]): AbacusConfig["check"] {
+  return { gates: validateCheckGates(raw?.gates ?? base.gates) };
 }

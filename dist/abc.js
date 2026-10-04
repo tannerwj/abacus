@@ -20,9 +20,13 @@ const conditionOps = new Set([
 ]);
 const branchStatements = [ts.isIfStatement, ts.isConditionalExpression, ts.isCaseClause, ts.isDefaultClause, ts.isCatchClause, ts.isForStatement, ts.isForOfStatement, ts.isForInStatement, ts.isWhileStatement, ts.isDoStatement];
 function isFunctionLike(node) {
-    return ts.isFunctionDeclaration(node) || ts.isMethodDeclaration(node) || ts.isArrowFunction(node) || ts.isFunctionExpression(node) || ts.isConstructorDeclaration(node);
+    return ts.isFunctionDeclaration(node) || ts.isMethodDeclaration(node) || ts.isGetAccessorDeclaration(node) || ts.isSetAccessorDeclaration(node) || ts.isArrowFunction(node) || ts.isFunctionExpression(node) || ts.isConstructorDeclaration(node);
 }
 export function functionName(node) {
+    if (ts.isGetAccessorDeclaration(node))
+        return `get ${node.name.getText()}`;
+    if (ts.isSetAccessorDeclaration(node))
+        return `set ${node.name.getText()}`;
     if ((ts.isFunctionDeclaration(node) || ts.isMethodDeclaration(node)) && node.name)
         return node.name.getText();
     if (ts.isConstructorDeclaration(node))
@@ -75,7 +79,8 @@ export function measure(fn) {
     return totals;
 }
 export function scoreSource(file, text, config) {
-    const source = ts.createSourceFile(file, text, ts.ScriptTarget.ES2022, true, file.endsWith("x") ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
+    const scriptKind = file.endsWith(".jsx") ? ts.ScriptKind.JSX : file.endsWith(".tsx") ? ts.ScriptKind.TSX : /\.[cm]?js$/u.test(file) ? ts.ScriptKind.JS : ts.ScriptKind.TS;
+    const source = ts.createSourceFile(file, text, ts.ScriptTarget.ES2022, true, scriptKind);
     const scores = [];
     const visit = (node) => {
         if (isFunctionLike(node) && node.body) {

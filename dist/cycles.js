@@ -6,28 +6,13 @@
  * is found. Uses the repo's `.dependency-cruiser.cjs` when present (written by
  * `abacus init`), otherwise abacus's bundled template.
  */
-import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { nodeToolBinPath, runNodeTool } from "./tool-runner.js";
 /** Project's depcruise if installed, else the one bundled with abacus. */
 export function depcruiseBinPath(cwd = process.cwd()) {
-    const ext = process.platform === "win32" ? ".cmd" : "";
-    const local = path.join(cwd, "node_modules", ".bin", `depcruise${ext}`);
-    if (fs.existsSync(local))
-        return local;
-    // Walk up from this module looking for the bundled dependency-cruiser.
-    // (Can't use require.resolve: the package's exports map has no require condition.)
-    let dir = path.dirname(new URL(import.meta.url).pathname);
-    for (let i = 0; i < 8; i++) {
-        const candidate = path.join(dir, "node_modules", "dependency-cruiser", "bin", "dependency-cruiser.mjs");
-        if (fs.existsSync(candidate))
-            return candidate;
-        const parent = path.dirname(dir);
-        if (parent === dir)
-            break;
-        dir = parent;
-    }
-    throw new Error(`no depcruise found (checked ${local} and parent node_modules)`);
+    return nodeToolBinPath("dependency-cruiser", "depcruise", cwd);
 }
 /** Repo config if present, else abacus's bundled template. Exported for tests. */
 export function cruiseConfigPath(cwd = process.cwd()) {
@@ -35,7 +20,7 @@ export function cruiseConfigPath(cwd = process.cwd()) {
     if (fs.existsSync(local))
         return local;
     // Template is CJS (dependency-cruiser require()s it); resolve relative to dist/.
-    const bundled = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "configs", "dependency-cruiser.cjs");
+    const bundled = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "configs", "dependency-cruiser.cjs");
     if (!fs.existsSync(bundled))
         throw new Error(`no dependency-cruiser config found (checked ${local} and ${bundled})`);
     return bundled;
@@ -49,11 +34,7 @@ export function runCycles(cwd = process.cwd()) {
     const bin = depcruiseBinPath(cwd);
     const config = cruiseConfigPath(cwd);
     const dir = sourceDir(cwd);
-    const out = spawnSync(process.execPath, [bin, "--config", config, "--output-type", "json", dir], {
-        cwd,
-        encoding: "utf8",
-        maxBuffer: 64 * 1024 * 1024,
-    });
+    const out = runNodeTool(bin, ["--config", config, "--output-type", "json", dir], cwd);
     if (out.error)
         throw new Error(`depcruise failed to run: ${out.error.message}`);
     // depcruise exits non-zero when violations are found; JSON still parses.

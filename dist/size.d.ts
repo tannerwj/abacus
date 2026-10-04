@@ -5,6 +5,7 @@ export interface SizeResult {
     actual: number;
     max: number;
     ok: boolean;
+    error?: string;
 }
 export declare function measureBudgets(config: AbacusConfig, cwd?: string): SizeResult[];
 export declare function reportSize(config: AbacusConfig, cwd?: string): boolean;

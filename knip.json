@@ -1,0 +1,9 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "entry": ["src/index.ts", "src/cli.ts", "test/**/*.test.ts", "test/fresh-install.mjs"],
+  "project": ["src/**/*.ts", "test/**/*.{ts,mjs}"],
+  "ignore": ["dist/**", "test/fixtures/**"],
+  "ignoreExportsUsedInFile": true,
+  "ignoreDependencies": ["dependency-cruiser", "jscpd", "oxfmt", "oxlint", "oxlint-tsgolint"],
+  "ignoreBinaries": ["wrangler"]
+}

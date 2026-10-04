@@ -165,6 +165,7 @@ export function detectKnipEntry(cwd = process.cwd()): string[] {
   entry.add("**/*.spec.{ts,tsx}");
   entry.add("**/*.e2e.{ts,tsx,js,mjs}");
   entry.add("*.config.{ts,js,mjs}");
+  entry.add(".dependency-cruiser.{js,cjs,mjs}");
   entry.add("scripts/**/*.{ts,js,mjs}");
   return [...entry];
 }
@@ -174,6 +175,8 @@ export function knipConfig(cwd = process.cwd()): string {
   return `${JSON.stringify({
     $schema: "https://unpkg.com/knip@6/schema.json",
     entry: detectKnipEntry(cwd),
+    // Generated build output is scanned by size budgets, not source dead-code checks.
+    ignore: ["dist/**", ".next/**", ".open-next/**", ".wrangler/**"],
     ignoreExportsUsedInFile: true,
   }, null, 2)}\n`;
 }

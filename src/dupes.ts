@@ -6,10 +6,10 @@
  * threshold (default 5%, configurable via `threshold` in `.jscpd.json`).
  * Prints every clone pair so the fix is obvious.
  */
-import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { nodeToolBinPath, runNodeTool } from "./tool-runner.js";
 
 export interface Clone {
   lines: number;
@@ -29,19 +29,7 @@ export const DEFAULT_THRESHOLD = 5;
 
 /** Project's jscpd if installed, else the one bundled with abacus. */
 export function jscpdBinPath(cwd = process.cwd()): string {
-  const ext = process.platform === "win32" ? ".cmd" : "";
-  const local = path.join(cwd, "node_modules", ".bin", `jscpd${ext}`);
-  if (fs.existsSync(local)) return local;
-  // Walk up from this module; the wrapper resolves the platform binary itself.
-  let dir = path.dirname(new URL(import.meta.url).pathname);
-  for (let i = 0; i < 8; i++) {
-    const candidate = path.join(dir, "node_modules", "jscpd", "run-jscpd.js");
-    if (fs.existsSync(candidate)) return candidate;
-    const parent = path.dirname(dir);
-    if (parent === dir) break;
-    dir = parent;
-  }
-  throw new Error(`no jscpd found (checked ${local} and parent node_modules)`);
+  return nodeToolBinPath("jscpd", "jscpd", cwd);
 }
 
 /** Source tree to scan: src/ when present, else the cwd. Exported for tests. */
@@ -81,11 +69,7 @@ export function runDupes(cwd = process.cwd()): DupesResult {
     if (fs.existsSync(configPath)) args.push("--config", configPath);
     args.push(dir);
 
-    const out = spawnSync(process.execPath, [bin, ...args], {
-      cwd,
-      encoding: "utf8",
-      maxBuffer: 64 * 1024 * 1024,
-    });
+    const out = runNodeTool(bin, args, cwd);
     if (out.error) throw new Error(`jscpd failed to run: ${out.error.message}`);
 
     const reportPath = path.join(outDir, "jscpd-report.json");

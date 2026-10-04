@@ -11,12 +11,29 @@ has an owner and a reason.
 | ≤ 400 lines/file, ≤ 120 lines/function (warn) | files that became modules by accident | oxlint (`max-lines*`) |
 | Floating / misused promises | the classic silent Worker bug | oxlint type-aware (`tsgolint`) |
 | gzip bundle budgets | the SPA quietly doubling, the Worker creeping toward the 1 MB limit | `abacus size` (+ `wrangler deploy --dry-run`) |
-| Ratchet: LOC, comment ratio, max ABC, oxlint count | the slow creep no per-function budget sees; every green run is the new ceiling | `abacus ratchet` |
+| Ratchet: LOC, comment ratio, max ABC, oxlint count | growth beyond a committed, reviewed baseline | `abacus ratchet` |
+| Unused exports, files, types, dependencies | abandoned code and missing entry-point configuration | `abacus deadcode` (knip) |
+| Leaked credentials | secrets accidentally committed to the working tree | `abacus secrets` (gitleaks) |
+| TypeScript errors + strictness advice | compiler errors; optional flags are advisory | `abacus tsc` |
+| Circular imports | fragile module evaluation order | `abacus cycles` (dependency-cruiser) |
+| Copy-paste duplication | clones exceeding the configured percentage | `abacus dupes` (jscpd) |
+| Expired dated comments | overdue TODO/FIXME/HACK/XXX deadlines | `abacus todos` |
 | `as` only, no `{} as T`, `!` warns, redundant `as` warns | type assertions that paper over a wrong type instead of fixing it | oxlint (`typescript/consistent-type-assertions`, `no-non-null-assertion`, `no-unnecessary-type-assertion`) |
 | `vi.mock` warns in tests | module mocking hiding the seam a real dependency injection would expose | oxlint (`vitest/no-restricted-vi-methods`) |
 | Formatting | bikeshedding | `abacus fmt` (oxfmt, prettier-compatible defaults) |
 
 ## Install
+
+Requires Node 24 (or Node ≥26). The bundled gitleaks wrapper requires Node 24,
+and dependency-cruiser 18 supports Node 22/24/26+. Development uses pnpm 11.19.0.
+For pnpm's build-script approval, add this to the consuming repository's
+`pnpm-workspace.yaml` before installing:
+
+```yaml
+allowBuilds:
+  "@tjohnson/abacus": false # dist is already built
+  "@b12k/gitleaks": true   # downloads the official binary and verifies SHA-256
+```
 
 ```bash
 pnpm add -D git+ssh://git@github.com/tannerwj/abacus.git oxlint oxlint-tsgolint oxfmt
@@ -25,11 +42,35 @@ pnpm abacus ratchet --write                   # snapshot today's numbers; commit
 ```
 
 `init` writes `abacus.config.json`, `.oxlintrc.json` (extending the preset) and
-`.oxfmtrc.jsonc`, and adds `lint` / `fmt` / `abc` / `size` / `ratchet` scripts. Then:
+`.oxfmtrc.jsonc`, plus knip, gitleaks, dependency-cruiser, and jscpd configs. It
+adds `check`, `lint`, `fmt`, `abc`, `size`, `ratchet`, `tsc`, `deadcode`, `secrets`,
+`cycles`, `dupes`, and `todos` scripts. Existing files and scripts are preserved.
+If gitleaks was installed with scripts disabled, authorize its build script
+above, then run `pnpm rebuild @b12k/gitleaks`.
+
+## Aggregate checks
+
+`abacus check` reads `check.gates` from `abacus.config.json`. Its backward-compatible
+default is `lint`, `abc`, and `ratchet`. The six new source gates are opt-in;
+the command prints which gates are excluded. To select them permanently:
+
+```json
+"check": { "gates": ["lint", "abc", "ratchet", "tsc", "deadcode", "secrets", "cycles", "dupes", "todos"] }
+```
+
+`abacus init --all` selects every source gate when writing a new config.
+`abacus check --all` runs them for one invocation, even with an existing config.
+Every selected gate runs even if an earlier one fails, and any failure or tool
+error makes the aggregate command exit 1. `tsc` errors fail; strictness advice
+does not. Unknown or empty gate lists are configuration errors.
+
+Size needs built assets and is excluded from `--all`. Run `abacus size` after
+building, or use `abacus check --all --with-size`. You can also explicitly include
+`"size"` in `check.gates` if your check always runs after a build. For example:
 
 ```jsonc
 // package.json
-"check":  "tsc --noEmit && pnpm fmt --check && pnpm lint && pnpm test && pnpm abc && pnpm ratchet",
+"check":  "pnpm fmt --check && pnpm test && abacus check --all",
 "deploy": "pnpm check && pnpm build && pnpm size && wrangler deploy"
 ```
 
@@ -62,6 +103,23 @@ Fitzpatrick's ABC: **A**ssignments (`=`, `+=`, `++`, `const x = …`),
 Score = √(A² + B² + C²). Nested functions are scored on their own.
 Cyclomatic complexity counts only C; ABC catches functions that are big
 without being branchy.
+Class and object getters/setters are scored too. Their names are prefixed with
+`get ` or `set `, so `src/model.ts get value` and `src/model.ts set value` can
+have separate reviewed allowlist entries.
+
+## Size budgets
+
+Each configured asset budget must match at least one file. A missing directory
+or zero matches fails rather than reporting a misleading zero-byte success.
+For a genuinely optional asset type in an existing directory, set `allowEmpty`
+on that budget only:
+
+```json
+{ "label": "Optional CSS", "dir": "dist/assets", "match": "\\.css$", "max": 20480, "allowEmpty": true }
+```
+
+The default is `allowEmpty: false`; populated budgets still enforce the gzip
+sum or largest-file limit.
 
 ## Ratchet
 
@@ -73,12 +131,19 @@ Fixed budgets get written up to. The ratchet makes the current value the ceiling
   "comments": { "roots": ["src"], "max": 0.3 } } }
 ```
 
-`abacus ratchet` fails when a metric exceeds snapshot × (1 + slack) or the fixed
+`abacus ratchet` fails when the baseline is missing, empty, malformed, has invalid
+values, or omits any enabled metric. A normal check never creates, repairs, or
+changes it. Enabling a new metric/root requires a deliberate baseline update.
+No enabled metrics is also a configuration failure.
+
+It fails when a metric exceeds snapshot × (1 + slack) or the fixed
 `max`; it prints "ratchet down available" when one decreased so you can
 `--write` the tighter snapshot. LOC = code lines (blank and comment-only lines
 skipped, TS/TSX/JS via the TypeScript scanner); comments = comment lines / code
 lines; `oxlintWarnings` counts warnings + errors from `oxlint --format json .`.
-Raising the snapshot is a reviewed diff to `abacus.ratchet.json`, not a flag.
+Only `abacus ratchet --write` (or the explicit alias `--update`) creates/replaces
+the snapshot. Commit and review that diff, especially if a ceiling increases;
+fixed maximums are still enforced during explicit writes.
 
 ## Formatting
 
@@ -119,6 +184,10 @@ cycle is found. Cycles are a code smell — they make module evaluation order
 fragile and signal that shared code wants its own module. `abacus init` writes
 a `.dependency-cruiser.cjs`; exempt intentional cycles there rather than
 ignoring the gate.
+Known upstream limitation: dependency-cruiser 18 can fail config loading with
+`URI malformed` when a project path contains a literal `%`. Space-containing
+paths are covered by the real packed-consumer integration; `%` paths remain
+unsupported by that dependency.
 
 ## Duplication
 
@@ -154,9 +223,17 @@ not cover that cost.
 
 ## Notes
 
-- pnpm ≥ 10 flags git dependencies for build scripts even though `dist/` is
-  prebuilt. Silence it once per repo in `pnpm-workspace.yaml`:
-  `allowBuilds: { "@tjohnson/abacus": false }`.
+- This repository opts into all source gates in its own config. Run `pnpm check`
+  (or `pnpm check:all`) for build, typecheck, tests, and the aggregate gates.
+  Type-aware lint may print advisory warnings; it fails on errors.
+- `pnpm test:install` makes a clean checkout and empty dependency store, runs
+  `pnpm install --frozen-lockfile` and the full check, then packs Abacus and runs
+  all ten gates in a newly initialized consumer whose path contains spaces.
+- The repo's knip config excludes generated `dist` and deliberate bad fixtures.
+  dependency-cruiser/jscpd are loaded by their CLI manifests; lint/formatter peers
+  are consumer tooling, and wrangler is an optional downstream binary. The
+  gitleaks allowlist is limited to the documented fake Stripe key in its exact
+  regression-test file; other paths and values remain scanned.
 
 - Type-aware lint needs tsconfig `paths` to be relative (`"./src/*"`) and no
   `baseUrl` (tsgolint limitation).

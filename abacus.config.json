@@ -1,1 +1,24 @@
-{ "$schema": "./configs/abacus.schema.json", "preset": "typescript", "roots": ["src"], "abc": { "budget": 60, "allow": {} } }
+{
+  "$schema": "./configs/abacus.schema.json",
+  "preset": "typescript",
+  "roots": [
+    "src"
+  ],
+  "abc": {
+    "budget": 60,
+    "allow": {}
+  },
+  "check": {
+    "gates": [
+      "lint",
+      "abc",
+      "ratchet",
+      "tsc",
+      "deadcode",
+      "secrets",
+      "cycles",
+      "dupes",
+      "todos"
+    ]
+  }
+}

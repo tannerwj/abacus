@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 import { spawnSync } from "node:child_process";
 import { reportAbc } from "./abc.js";
-import { loadConfig, type Preset } from "./config.js";
+import { loadConfig, SOURCE_GATES, type Preset } from "./config.js";
+import { reportCheck } from "./check.js";
 import { reportDeadcode } from "./deadcode.js";
 import { reportSecrets } from "./secrets.js";
 import { reportTsc } from "./tsc.js";
@@ -17,10 +18,10 @@ const flag = (name: string): string | undefined => { const i = rest.indexOf(name
 
 const HELP = `abacus — quality gates for TypeScript projects
 
-  abacus init [--preset typescript|cloudflare-worker|vite-spa|nextjs]   write abacus.config.json, .oxlintrc.json, .oxfmtrc.jsonc; add scripts
+  abacus init [--preset typescript|cloudflare-worker|vite-spa|nextjs] [--all]   write configs and scripts; --all selects every source gate
   abacus abc [--top N]                                                  ABC scores per function vs budget (exit 1 if over)
   abacus size                                                           gzip bundle budgets (run after build)
-  abacus ratchet [--write]                                              LOC / comment ratio / max ABC / oxlint count vs snapshot (exit 1 if grown)
+  abacus ratchet [--write|--update]                                     check committed baseline; explicit flags write/update it
   abacus lint [paths…]                                                  oxlint --type-aware with the repo's .oxlintrc.json
   abacus fmt [--check] [paths…]                                         oxfmt (write by default) with the repo's .oxfmtrc.jsonc
   abacus deadcode                                                       unused exports/files/types/deps via knip (exit 1 if found)
@@ -29,16 +30,16 @@ const HELP = `abacus — quality gates for TypeScript projects
   abacus cycles                                                         circular imports via dependency-cruiser (exit 1 if found)
   abacus dupes                                                          copy-paste duplication via jscpd (exit 1 over threshold)
   abacus todos                                                          expired dated TODOs (exit 1 if any past due)
-  abacus check                                                          lint + abc + ratchet (add size after your build step)
+  abacus check [--all] [--with-size]                                    configured check.gates (default lint + abc + ratchet); --all runs every source gate
 `;
 
 const sh = (bin: string, args: string[]): number => spawnSync(localBin(bin), args, { stdio: "inherit" }).status ?? 1;
 const top = () => Number(flag("--top") ?? 10);
 const COMMANDS: Record<string, () => number> = {
-  init: () => { init((flag("--preset") ?? "typescript") as Preset); return 0; },
+  init: () => { init((flag("--preset") ?? "typescript") as Preset, process.cwd(), { all: rest.includes("--all") }); return 0; },
   abc: () => (reportAbc(loadConfig(), top()) ? 0 : 1),
   size: () => (reportSize(loadConfig()) ? 0 : 1),
-  ratchet: () => (reportRatchet(loadConfig(), rest.includes("--write")) ? 0 : 1),
+  ratchet: () => (reportRatchet(loadConfig(), rest.includes("--write") || rest.includes("--update")) ? 0 : 1),
   lint: () => sh("oxlint", ["--type-aware", ...(rest.length ? rest : ["."])]),
   fmt: () => sh("oxfmt", rest.length ? rest : ["."]),
   deadcode: () => (reportDeadcode(process.cwd()) ? 0 : 1),
@@ -47,7 +48,12 @@ const COMMANDS: Record<string, () => number> = {
   cycles: () => (reportCycles(process.cwd()) ? 0 : 1),
   dupes: () => (reportDupes(process.cwd()) ? 0 : 1),
   todos: () => (reportTodos(process.cwd()) ? 0 : 1),
-  check: () => { const lint = sh("oxlint", ["--type-aware", "."]); const abc = reportAbc(loadConfig(), top()) ? 0 : 1; const ratchet = reportRatchet(loadConfig(), false) ? 0 : 1; return lint || abc || ratchet; },
+  check: () => {
+    const config = loadConfig();
+    const gates = rest.includes("--all") ? [...SOURCE_GATES] : [...config.check.gates];
+    if (rest.includes("--with-size")) gates.push("size");
+    return reportCheck(config, gates, process.cwd(), top()) ? 0 : 1;
+  },
   help: () => { console.log(HELP); return 0; }
 };
 

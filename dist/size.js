@@ -18,7 +18,11 @@ export function measureBudgets(config, cwd = process.cwd()) {
         if (!fs.existsSync(dir))
             throw new Error(`${budget.label}: ${budget.dir} missing — build first`);
         const re = new RegExp(budget.match, "u");
-        const sizes = fs.readdirSync(dir).filter((name) => re.test(name)).map((name) => gzipSize(path.join(dir, name)));
+        const sizes = fs.readdirSync(dir, { withFileTypes: true }).filter((entry) => re.test(entry.name) && (entry.isFile() || (entry.isSymbolicLink() && fs.statSync(path.join(dir, entry.name)).isFile()))).map((entry) => gzipSize(path.join(dir, entry.name)));
+        if (sizes.length === 0 && budget.allowEmpty !== true) {
+            results.push({ label: budget.label, actual: 0, max: budget.max, ok: false, error: `No files matching ${JSON.stringify(budget.match)} in ${budget.dir} — build first or correct the budget configuration.` });
+            continue;
+        }
         const actual = budget.mode === "largest" ? Math.max(0, ...sizes) : sizes.reduce((sum, size) => sum + size, 0);
         results.push({ label: budget.label, actual, max: budget.max, ok: actual <= budget.max });
     }
@@ -44,11 +48,14 @@ export function reportSize(config, cwd = process.cwd()) {
         return true;
     }
     const results = measureBudgets(config, cwd);
-    for (const r of results)
+    for (const r of results) {
         console.log(`${r.ok ? " " : "✗"} ${r.label.padEnd(42)} ${kb(r.actual).padStart(10)} / ${kb(r.max)}`);
+        if (r.error)
+            console.error(`  ${r.error}`);
+    }
     const failed = results.filter((r) => !r.ok);
     if (failed.length) {
-        console.error("\nSize budget exceeded. Raise it in abacus.config.json only as a deliberate decision.");
+        console.error("\nSize budget check failed. Verify matching build assets; raise a size limit only as a deliberate decision.");
         return false;
     }
     console.log("\nAll bundles within budget.");

@@ -52,4 +52,18 @@ describe("secrets gate", () => {
       fs.rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  test("repository allowlist exempts only the fake key in its exact test file", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "abacus-secrets-allowlist-"));
+    try {
+      fs.copyFileSync(new URL("../.gitleaks.toml", import.meta.url), path.join(dir, ".gitleaks.toml"));
+      fs.mkdirSync(path.join(dir, "test"));
+      fs.writeFileSync(path.join(dir, "test/secrets.test.ts"), `const fake = "${FAKE_STRIPE_KEY}";\n`);
+      expect(scanSecrets(dir)).toEqual([]);
+      fs.writeFileSync(path.join(dir, "other.js"), `const unexpected = "${FAKE_STRIPE_KEY}";\n`);
+      expect(scanSecrets(dir).map((finding) => finding.file)).toContain("other.js");
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });

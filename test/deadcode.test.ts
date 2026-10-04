@@ -49,9 +49,11 @@ describe("deadcode gate", () => {
   });
 
   test("knipConfig emits valid JSON with the research-backed defaults", () => {
-    const config = JSON.parse(knipConfig(fixtureDir)) as { entry: string[]; ignoreExportsUsedInFile: boolean };
+    const config = JSON.parse(knipConfig(fixtureDir)) as { entry: string[]; ignore: string[]; ignoreExportsUsedInFile: boolean };
     expect(config.entry).toContain("src/index.ts");
     expect(config.ignoreExportsUsedInFile).toBe(true);
+    expect(config.entry).toContain(".dependency-cruiser.{js,cjs,mjs}");
+    expect(config.ignore).toContain("dist/**");
   });
 
   test("runKnip finds the fixture's dead export, dead type, and orphan file", () => {

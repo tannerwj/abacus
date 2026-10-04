@@ -15,7 +15,7 @@ const kb = (n: number) => `${(n / KB).toFixed(1)} KB`;
 
 export function gzipSize(file: string): number { return gzipSync(fs.readFileSync(file)).length; }
 
-export interface SizeResult { label: string; actual: number; max: number; ok: boolean }
+export interface SizeResult { label: string; actual: number; max: number; ok: boolean; error?: string }
 
 export function measureBudgets(config: AbacusConfig, cwd = process.cwd()): SizeResult[] {
   const results: SizeResult[] = [];
@@ -23,7 +23,11 @@ export function measureBudgets(config: AbacusConfig, cwd = process.cwd()): SizeR
     const dir = path.join(cwd, budget.dir);
     if (!fs.existsSync(dir)) throw new Error(`${budget.label}: ${budget.dir} missing — build first`);
     const re = new RegExp(budget.match, "u");
-    const sizes = fs.readdirSync(dir).filter((name) => re.test(name)).map((name) => gzipSize(path.join(dir, name)));
+    const sizes = fs.readdirSync(dir, { withFileTypes: true }).filter((entry) => re.test(entry.name) && (entry.isFile() || (entry.isSymbolicLink() && fs.statSync(path.join(dir, entry.name)).isFile()))).map((entry) => gzipSize(path.join(dir, entry.name)));
+    if (sizes.length === 0 && budget.allowEmpty !== true) {
+      results.push({ label: budget.label, actual: 0, max: budget.max, ok: false, error: `No files matching ${JSON.stringify(budget.match)} in ${budget.dir} — build first or correct the budget configuration.` });
+      continue;
+    }
     const actual = budget.mode === "largest" ? Math.max(0, ...sizes) : sizes.reduce((sum, size) => sum + size, 0);
     results.push({ label: budget.label, actual, max: budget.max, ok: actual <= budget.max });
   }
@@ -45,9 +49,12 @@ export function measureBudgets(config: AbacusConfig, cwd = process.cwd()): SizeR
 export function reportSize(config: AbacusConfig, cwd = process.cwd()): boolean {
   if (config.size.budgets.length === 0 && !config.size.worker) { console.log("No size budgets configured (abacus.config.json → size)."); return true; }
   const results = measureBudgets(config, cwd);
-  for (const r of results) console.log(`${r.ok ? " " : "✗"} ${r.label.padEnd(42)} ${kb(r.actual).padStart(10)} / ${kb(r.max)}`);
+  for (const r of results) {
+    console.log(`${r.ok ? " " : "✗"} ${r.label.padEnd(42)} ${kb(r.actual).padStart(10)} / ${kb(r.max)}`);
+    if (r.error) console.error(`  ${r.error}`);
+  }
   const failed = results.filter((r) => !r.ok);
-  if (failed.length) { console.error("\nSize budget exceeded. Raise it in abacus.config.json only as a deliberate decision."); return false; }
+  if (failed.length) { console.error("\nSize budget check failed. Verify matching build assets; raise a size limit only as a deliberate decision."); return false; }
   console.log("\nAll bundles within budget.");
   return true;
 }
