@@ -132,4 +132,29 @@ describe("pure policy upgrade preview", () => {
     expect(comparePolicyRuns(before, after).cleanAfter).toBe(true);
   });
 
+  test("unchanged compiler project selectors require complete input-set equality", () => {
+    const policy = pack(), before = run(policy), after = run(policy);
+    const project = { project: "tsconfig.json", outcome: "pass" as const, scope: { kind: "repository" as const, targets: ["tsconfig.json"], scanned: 1, unit: "files" }, diagnostics: [], configs: [{ path: "tsconfig.json", digest: digest("same config") }], sources: [{ path: "src/index.ts", digest: digest("same source") }], dependencies: [{ path: "installed:node_modules/typed/a.d.ts", digest: digest("number declaration") }] };
+    findCheck(before, "source-types").projects = [structuredClone(project)];
+    findCheck(after, "source-types").projects = [{ ...structuredClone(project), outcome: "fail", dependencies: [{ path: "installed:node_modules/typed/b.d.ts", digest: digest("string declaration") }] }];
+    expect(() => comparePolicyRuns(before, after)).toThrow(/same complete input closure for shared compiler projects/);
+    const changed = findCheck(after, "source-types").projects?.[0];
+    if (!changed) throw new Error("Missing compiler project fixture");
+    changed.project = "tsconfig.app.json";
+    expect(comparePolicyRuns(before, after).cleanAfter).toBe(true);
+  });
+
+  test("shared complete compiler input digests must match even when input paths match", () => {
+    const policy = pack(), before = run(policy), after = run(policy);
+    const project = { project: "tsconfig.json", outcome: "pass" as const, scope: { kind: "repository" as const, targets: ["tsconfig.json"], scanned: 1, unit: "files" }, diagnostics: [], configs: [{ path: "tsconfig.json", digest: digest("config") }], sources: [{ path: "index.ts", digest: digest("source") }], dependencies: [], inputDigest: digest("input closure") };
+    findCheck(before, "source-types").projects = [structuredClone(project)];
+    findCheck(after, "source-types").projects = [{ ...structuredClone(project), inputDigest: digest("changed closure") }];
+    expect(() => comparePolicyRuns(before, after)).toThrow(/same complete input closure/);
+    findCheck(after, "source-types").projects = [{ ...structuredClone(project), outcome: "incomplete", inputDigest: undefined, sources: [] }];
+    findCheck(after, "source-types").outcome = "incomplete";
+    findCheck(after, "source-types").blocking = true;
+    after.clean = false;
+    expect(comparePolicyRuns(before, after).newBlockers).toContainEqual({ checkId: "source-types", outcome: "incomplete", fingerprints: [] });
+  });
+
 });
