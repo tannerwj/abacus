@@ -1,0 +1,1 @@
+{"name":"abacus-profile-dual","version":"1.0.0","license":"MIT","engines":{"node":">=22"},"files":["dist"],"exports":{".":{"import":{"types":"./dist/index.d.mts","default":"./dist/index.mjs"},"require":{"types":"./dist/index.d.cts","default":"./dist/index.cjs"}}}}

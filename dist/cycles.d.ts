@@ -2,10 +2,13 @@ export interface CycleViolation {
     from: string;
     to: string;
     cycle: string[];
+    rule: string;
+    severity: "error" | "warn" | "info" | "ignore";
 }
 export interface CyclesResult {
     clean: boolean;
     violations: CycleViolation[];
+    files: number;
 }
 /** Project's depcruise if installed, else the one bundled with abacus. */
 export declare function depcruiseBinPath(cwd?: string): string;
@@ -13,6 +16,6 @@ export declare function depcruiseBinPath(cwd?: string): string;
 export declare function cruiseConfigPath(cwd?: string): string;
 /** Source tree to cruise: src/ when present, else the cwd. Exported for tests. */
 export declare function sourceDir(cwd?: string): string;
-export declare function runCycles(cwd?: string): CyclesResult;
+export declare function runCycles(cwd?: string, configPath?: string): CyclesResult;
 /** Human-readable report. Returns true when no cycles were found. */
 export declare function reportCycles(cwd?: string): boolean;

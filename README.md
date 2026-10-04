@@ -239,3 +239,29 @@ not cover that cost.
   `baseUrl` (tsgolint limitation).
 - Generated or vendored code (e.g. shadcn `components/ui`) goes in
   `exclude` and `ignorePatterns`, not in the allow list.
+
+## Versioned standards and upgrade previews
+
+Checks now emit a normalized evidence contract with actual scan scope, distinct
+outcomes, visible waivers, and source/configuration/tool provenance. A required
+empty scan or tool failure cannot turn green. Use `abacus check --json` or
+`abacus check --evidence /tmp/abacus-run.json`; the same command runs locally and
+in CI. See [the evidence contract](docs/evidence.md).
+
+An optional repository-owned `policy.pack` pins an installed npm or local policy
+artifact by exact version and content digest. Packs keep native configs readable,
+use bounded known parameters, and declare compatible analyzer versions. Exceptions
+require an exact rule/subject, owner, reason, and expiry. See
+[policy packs](docs/policy-packs.md).
+
+`abacus preview --from old-pin.json --to candidate-pin.json --json` evaluates both
+packs on the same unchanged source/build tree and at the same time. It separates
+rule/config/threshold/enforcement changes, added/resolved findings, new blockers,
+and affected exceptions. It does not adopt the candidate.
+
+Explicit profiles add full-graph architecture boundaries through dependency-cruiser,
+and package validation with publint, Are The Types Wrong, and packed TypeScript
+consumers in the modes a library actually promises. See
+[architecture and package profiles](docs/profiles.md). These profiles are opt-in;
+`--all` retains its source-gate meaning and never silently promises package or
+architecture applicability.

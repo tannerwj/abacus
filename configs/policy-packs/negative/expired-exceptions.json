@@ -1,0 +1,1 @@
+[{ "id": "legacy-function", "ruleId": "abc/budget", "subject": "src/legacy.ts legacy", "owner": "platform-team", "reason": "Decompose this function after the tracked migration", "expires": "2025-12-31" }]

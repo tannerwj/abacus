@@ -1,3 +1,4 @@
+import type { PolicyPackReference, RepositoryException } from "./policy.js";
 export type Preset = "typescript" | "cloudflare-worker" | "vite-spa" | "nextjs";
 export declare const CHECK_GATES: readonly ["lint", "abc", "ratchet", "tsc", "deadcode", "secrets", "cycles", "dupes", "todos", "size"];
 export type CheckGate = typeof CHECK_GATES[number];
@@ -63,8 +64,19 @@ export interface AbacusConfig {
         };
     };
     ratchet: RatchetConfig;
+    /** Optional immutable organization pack. Ordinary checks never update its pin. */
+    policy?: {
+        pack: PolicyPackReference;
+        exceptions?: RepositoryException[];
+    };
 }
 export declare const CONFIG_FILE = "abacus.config.json";
 export declare function defaults(preset: Preset): AbacusConfig;
 export declare function loadConfig(cwd?: string): AbacusConfig;
+/** Only read-only deployment selectors; protected dry-run/output flags are not configurable. */
+export declare function validateWranglerArgs(input: unknown): string[];
+export declare function assertProjectPath(cwd: string, input: string, label: string): void;
+export declare function validateProjectInputs(config: AbacusConfig, cwd: string): void;
+/** Runtime validation matters: JSON values do not acquire TypeScript's guarantees. */
+export declare function validateAbacusConfig(config: AbacusConfig): void;
 export declare function validateCheckGates(gates: unknown): CheckGate[];

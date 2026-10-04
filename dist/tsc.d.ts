@@ -7,6 +7,7 @@ export interface TscResult {
     options: Record<string, unknown>;
     /** tsconfig path used, if any */
     configPath?: string;
+    files: number;
 }
 /** Project's tsc if installed, else the TypeScript bundled with abacus. */
 export declare function tscBinPath(cwd?: string): string;

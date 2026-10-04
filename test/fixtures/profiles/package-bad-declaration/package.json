@@ -1,0 +1,1 @@
+{"name": "abacus-profile-esm", "version": "1.0.0", "type": "module", "license": "MIT", "engines": {"node": ">=22"}, "files": ["dist"], "types": "./dist/index.d.cts", "exports": {".": {"types": "./dist/index.d.cts", "import": "./dist/index.js"}}}

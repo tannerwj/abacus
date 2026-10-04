@@ -18,6 +18,6 @@ export declare function parseTodoLine(line: string): {
     kind: string;
     date: string | null;
 } | null;
-export declare function runTodos(cwd?: string): TodosResult;
+export declare function runTodos(cwd?: string, evaluatedAt?: string): TodosResult;
 /** Human-readable report. Returns true when no TODO is past its date. */
 export declare function reportTodos(cwd?: string): boolean;

@@ -1,0 +1,1 @@
+{ "categories": { "correctness": "error" }, "rules": { "no-debugger": "error" } }

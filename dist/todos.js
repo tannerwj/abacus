@@ -46,14 +46,16 @@ export function parseTodoLine(line) {
     const dateMatch = DATE_PATTERN.exec(line.slice(m.index));
     return { kind, date: dateMatch ? dateMatch[0] : null };
 }
-function isExpired(dateStr) {
+function isExpired(dateStr, evaluatedAt) {
     const [y, mo, d] = dateStr.split("-").map(Number);
     const date = new Date(Date.UTC(y, mo - 1, d));
-    const today = new Date();
+    const today = new Date(evaluatedAt);
+    if (!Number.isFinite(today.getTime()))
+        throw new Error("Invalid evaluation time");
     today.setUTCHours(0, 0, 0, 0);
     return date < today;
 }
-export function runTodos(cwd = process.cwd()) {
+export function runTodos(cwd = process.cwd(), evaluatedAt = new Date().toISOString()) {
     const todos = [];
     for (const file of sourceFiles(cwd)) {
         const content = fs.readFileSync(file, "utf8");
@@ -62,7 +64,7 @@ export function runTodos(cwd = process.cwd()) {
             const parsed = parseTodoLine(line);
             if (!parsed)
                 return;
-            const expired = parsed.date ? isExpired(parsed.date) : false;
+            const expired = parsed.date ? isExpired(parsed.date, evaluatedAt) : false;
             todos.push({
                 file: path.relative(cwd, file),
                 line: i + 1,

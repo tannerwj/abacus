@@ -23,9 +23,17 @@ export interface DupesResult {
   percentage: number;
   threshold: number;
   clones: Clone[];
+  files: number;
 }
 
 export const DEFAULT_THRESHOLD = 5;
+
+function reportStatistics(total: { percentage: number; sources: number } | undefined): { percentage: number; files: number } {
+  const percentage = total?.percentage;
+  const files = total?.sources;
+  if (typeof percentage !== "number" || !Number.isFinite(percentage) || typeof files !== "number" || !Number.isInteger(files) || files < 0) throw new Error("jscpd report has invalid statistics");
+  return { percentage, files };
+}
 
 /** Project's jscpd if installed, else the one bundled with abacus. */
 export function jscpdBinPath(cwd = process.cwd()): string {
@@ -39,8 +47,8 @@ export function sourceDir(cwd = process.cwd()): string {
 }
 
 /** Threshold from .jscpd.json when present, else the default. Exported for tests. */
-export function thresholdFor(cwd = process.cwd()): number {
-  const configPath = path.join(cwd, ".jscpd.json");
+export function thresholdFor(cwd = process.cwd(), file?: string): number {
+  const configPath = file ?? path.join(cwd, ".jscpd.json");
   if (fs.existsSync(configPath)) {
     try {
       const config = JSON.parse(fs.readFileSync(configPath, "utf8")) as { threshold?: unknown };
@@ -52,10 +60,10 @@ export function thresholdFor(cwd = process.cwd()): number {
   return DEFAULT_THRESHOLD;
 }
 
-export function runDupes(cwd = process.cwd()): DupesResult {
+export function runDupes(cwd = process.cwd(), file?: string): DupesResult {
   const bin = jscpdBinPath(cwd);
   const dir = sourceDir(cwd);
-  const threshold = thresholdFor(cwd);
+  const threshold = thresholdFor(cwd, file);
   const outDir = fs.mkdtempSync(path.join(os.tmpdir(), "abacus-dupes-"));
   try {
     const args = [
@@ -65,12 +73,13 @@ export function runDupes(cwd = process.cwd()): DupesResult {
       "--output", outDir,
       "--silent",
     ];
-    const configPath = path.join(cwd, ".jscpd.json");
+    const configPath = file ?? path.join(cwd, ".jscpd.json");
     if (fs.existsSync(configPath)) args.push("--config", configPath);
     args.push(dir);
 
     const out = runNodeTool(bin, args, cwd);
     if (out.error) throw new Error(`jscpd failed to run: ${out.error.message}`);
+    if (out.status !== 0 && out.status !== 1) throw new Error(`jscpd exited ${out.status}`);
 
     const reportPath = path.join(outDir, "jscpd-report.json");
     if (!fs.existsSync(reportPath)) {
@@ -84,7 +93,7 @@ export function runDupes(cwd = process.cwd()): DupesResult {
         secondFile: { name: string; start: number; end: number };
       }>;
       statistics: {
-        total: { percentage: number };
+        total: { percentage: number; sources: number };
       };
     };
 
@@ -94,8 +103,10 @@ export function runDupes(cwd = process.cwd()): DupesResult {
       first: { file: d.firstFile.name, start: d.firstFile.start, end: d.firstFile.end },
       second: { file: d.secondFile.name, start: d.secondFile.start, end: d.secondFile.end },
     }));
-    const percentage = report.statistics?.total?.percentage ?? 0;
-    return { clean: percentage <= threshold, percentage, threshold, clones };
+    const { percentage, files } = reportStatistics(report.statistics?.total);
+    if (!Array.isArray(report.duplicates)) throw new Error("jscpd report has invalid duplicates");
+    if (out.status !== 0 && percentage <= threshold) throw new Error("jscpd exited nonzero without a threshold violation");
+    return { clean: percentage <= threshold, percentage, threshold, clones, files };
   } finally {
     fs.rmSync(outDir, { recursive: true, force: true });
   }

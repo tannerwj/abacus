@@ -67,3 +67,20 @@ describe("tsc gate", () => {
     }
   }, 60_000);
 });
+
+test("tsc runs the declared project CLI rather than platform .bin shims", () => {
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "abacus-tsc-shims-"));
+  try {
+    const root = path.join(cwd, "node_modules/typescript");
+    const shims = path.join(cwd, "node_modules/.bin");
+    fs.mkdirSync(root, { recursive: true }); fs.mkdirSync(shims);
+    fs.writeFileSync(path.join(root, "package.json"), JSON.stringify({ name: "typescript", version: "5.9.3", bin: { tsc: "tsc" } }));
+    fs.writeFileSync(path.join(root, "tsc"), `console.log(${JSON.stringify(path.join(cwd, "index.ts"))});`);
+    fs.writeFileSync(path.join(shims, "tsc"), "#!/bin/sh\nexit 99\n");
+    fs.writeFileSync(path.join(shims, "tsc.cmd"), "@ECHO OFF\r\nEXIT /B 99\r\n");
+    fs.writeFileSync(path.join(cwd, "tsconfig.json"), JSON.stringify({ files: ["index.ts"] }));
+    fs.writeFileSync(path.join(cwd, "index.ts"), "export const x = 1;");
+    expect(tscBinPath(cwd)).toBe(path.join(root, "tsc"));
+    expect(runTsc(cwd)).toMatchObject({ clean: true, files: 1 });
+  } finally { fs.rmSync(cwd, { recursive: true, force: true }); }
+});

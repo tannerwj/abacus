@@ -60,7 +60,18 @@ try {
     },
   }, null, 2));
   fs.writeFileSync(path.join(consumer, "pnpm-workspace.yaml"), 'allowBuilds:\n  esbuild: true\n  "@b12k/gitleaks": true\n  "@tjohnson/abacus": false\n');
-  fs.writeFileSync(path.join(consumer, "src/index.ts"), 'export const message = "hello";\n');
+  // Qualifies for jscpd's native minimum file/token scope, rather than a zero-target scan.
+  fs.writeFileSync(path.join(consumer, "src/index.ts"), `export function describeInbox(name: string, count: number): string {
+  const recipient = name.trim();
+  const total = Math.max(0, count);
+  const noun = total === 1 ? "message" : "messages";
+  const greeting = recipient.length > 0 ? recipient : "friend";
+  const prefix = "Hello " + greeting;
+  const countLabel = total.toString();
+  const summary = countLabel + " " + noun;
+  return prefix + ", you have " + summary;
+}
+`);
   fs.writeFileSync(path.join(consumer, "tsconfig.json"), JSON.stringify({
     compilerOptions: { target: "ES2022", module: "NodeNext", moduleResolution: "NodeNext", strict: true, types: [] },
     include: ["src/**/*.ts"],
@@ -83,11 +94,30 @@ try {
   for (const gate of ["lint", "abc", "ratchet", "tsc", "deadcode", "secrets", "cycles", "dupes", "todos", "size"]) {
     assert.ok(output.includes(`Checking ${gate}…`), `${gate} must run in the packed consumer`);
   }
+  const evidence = JSON.parse(run(process.execPath, [cli, "check", "--all", "--with-size", "--json"], consumer));
+  assert.equal(evidence.clean, true);
+  assert.equal(evidence.checks.length, 10);
+  assert.ok(evidence.checks.every((check) => check.outcome === "pass" && check.scope.scanned > 0));
+  assert.match(evidence.source.treeDigest, /^[a-f0-9]{64}$/);
+  assert.match(evidence.configDigest, /^[a-f0-9]{64}$/);
+  console.log("Packed consumer: pinned shared-policy upgrade preview on identical inputs");
+  for (const [name, version] of [["advisory", "1.0.0"], ["advisory-next", "1.1.0"]]) {
+    const packFile = path.join(consumer, "node_modules/@tjohnson/abacus/configs/policy-packs", name, "policy.json");
+    const digest = run(process.execPath, [cli, "policy-digest", "--path", packFile], consumer).trim();
+    fs.writeFileSync(path.join(consumer, `${name}-pin.json`), JSON.stringify({ path: packFile, version, digest }));
+  }
+  const upgrade = JSON.parse(run(process.execPath, [cli, "preview", "--from", "advisory-pin.json", "--to", "advisory-next-pin.json", "--json"], consumer));
+  assert.equal(upgrade.before.source.treeDigest, upgrade.after.source.treeDigest);
+  assert.equal(upgrade.before.evaluatedAt, upgrade.after.evaluatedAt);
+  assert.equal(upgrade.preview.cleanBefore, true);
+  assert.equal(upgrade.preview.cleanAfter, true);
+  assert.ok(upgrade.preview.thresholdChanges.length > 0);
+  assert.ok(upgrade.preview.enforcementChanges.length > 0);
   const consumerLock = path.join(consumer, "pnpm-lock.yaml");
   const consumerBefore = fingerprint(consumerLock);
   runPnpm(["install", "--frozen-lockfile", "--store-dir", store], consumer);
   assert.equal(fingerprint(consumerLock), consumerBefore);
-  console.log("Fresh frozen install and all packed-consumer gates passed");
+  console.log("Fresh frozen install, packed-consumer gates/evidence, and policy upgrade preview passed");
 } finally {
   fs.rmSync(temp, { recursive: true, force: true });
 }

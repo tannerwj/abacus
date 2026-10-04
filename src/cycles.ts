@@ -10,16 +10,21 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { nodeToolBinPath, runNodeTool } from "./tool-runner.js";
+import { parseGraphReport, type GraphReport } from "./dependency-graph.js";
+import { assertProjectPath } from "./config.js";
 
 export interface CycleViolation {
   from: string;
   to: string;
   cycle: string[];
+  rule: string;
+  severity: "error" | "warn" | "info" | "ignore";
 }
 
 export interface CyclesResult {
   clean: boolean;
   violations: CycleViolation[];
+  files: number;
 }
 
 /** Project's depcruise if installed, else the one bundled with abacus. */
@@ -43,24 +48,37 @@ export function sourceDir(cwd = process.cwd()): string {
   return fs.existsSync(src) && fs.statSync(src).isDirectory() ? src : cwd;
 }
 
-export function runCycles(cwd = process.cwd()): CyclesResult {
+function validateGraphInputs(report: GraphReport, cwd: string): void {
+  for (const key of ["tsConfig", "webpackConfig", "babelConfig"]) {
+    const option = report.summary.optionsUsed[key];
+    if (option && typeof option === "object" && "fileName" in option && typeof option.fileName === "string") assertProjectPath(cwd, option.fileName, "Native cycle config input");
+  }
+  for (const module of report.modules) if (!module.source.split(/[\\/]/u).includes("node_modules")) assertProjectPath(cwd, module.source, "Cycle graph source");
+  if (!report.summary.ruleSetUsed.forbidden.length) throw new Error("Cycle graph has no forbidden native rules");
+  if (report.modules.some((item) => item.dependencies.some((dependency) => dependency.couldNotResolve))) throw new Error("Cycle graph contains unresolved imports");
+}
+
+export function runCycles(cwd = process.cwd(), configPath?: string): CyclesResult {
   const bin = depcruiseBinPath(cwd);
-  const config = cruiseConfigPath(cwd);
+  const config = configPath ?? cruiseConfigPath(cwd);
   const dir = sourceDir(cwd);
-  const out = runNodeTool(bin, ["--config", config, "--output-type", "json", dir], cwd);
+  const out = runNodeTool(bin, ["--config", config, "--output-type", "json", "--no-cache", "--no-ignore-known", dir], cwd);
   if (out.error) throw new Error(`depcruise failed to run: ${out.error.message}`);
+  if (out.status !== 0 && out.status !== 1) throw new Error(`depcruise exited ${out.status}`);
   // depcruise exits non-zero when violations are found; JSON still parses.
   const text = (out.stdout ?? "").trim();
   if (!text) throw new Error(`depcruise produced no output (stderr: ${(out.stderr ?? "").slice(0, 500)})`);
-  const report = JSON.parse(text) as {
-    summary: { violations: Array<{ from: string; to: string; cycle?: Array<{ name: string } | string> }> };
-  };
+  const report = parseGraphReport(text, out.status ?? -1);
+  validateGraphInputs(report, cwd);
   const violations = (report.summary?.violations ?? []).map((v) => ({
     from: v.from,
-    to: v.to,
+    to: v.to ?? v.from,
     cycle: (v.cycle ?? []).map((c) => (typeof c === "string" ? c : c.name)),
+    rule: v.rule.name,
+    severity: v.rule.severity,
   }));
-  return { clean: violations.length === 0, violations };
+  if (out.status !== 0 && violations.length === 0) throw new Error("depcruise exited nonzero without graph violations");
+  return { clean: !violations.some((item) => item.severity === "error"), violations, files: report.modules.length };
 }
 
 /** Human-readable report. Returns true when no cycles were found. */
