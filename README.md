@@ -24,8 +24,9 @@ has an owner and a reason.
 
 ## Install
 
-Requires Node 24 (or Node ≥26). The bundled gitleaks wrapper requires Node 24,
-and dependency-cruiser 18 supports Node 22/24/26+. Development uses pnpm 11.19.0.
+Requires Node 22+. The bundled gitleaks wrapper declares Node 24 but uses only
+standard APIs, and dependency-cruiser 18 supports Node 22/24/26+.
+Development uses pnpm 11.19.0.
 For pnpm's build-script approval, add this to the consuming repository's
 `pnpm-workspace.yaml` before installing:
 
