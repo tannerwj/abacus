@@ -104,7 +104,8 @@ function secretEvidence(cwd, configPath) {
 }
 function cycleEvidence(cwd, configPath) {
     const measured = runCycles(cwd, configPath);
-    return checked({ outcome: measured.clean ? "pass" : "fail", scope: scope("graph", [path.relative(cwd, sourceDir(cwd)) || "."], measured.files, "modules"), findings: measured.violations.map((item) => finding(`cycles/${item.rule}`, `${item.from} -> ${item.to}`, "Circular or forbidden dependency", item.severity === "error" ? "error" : item.severity === "warn" ? "warning" : "info")), tool: toolMetadata(depcruiseBinPath(cwd), "dependency-cruiser"), configs: configs(cwd, [configPath ?? cruiseConfigPath(cwd)]) });
+    const notes = measured.unresolved > 0 ? [`${measured.unresolved} import${measured.unresolved === 1 ? "" : "s"} could not be resolved; cycle coverage may be incomplete`] : [];
+    return checked({ outcome: measured.clean ? "pass" : "fail", scope: scope("graph", [path.relative(cwd, sourceDir(cwd)) || "."], measured.files, "modules"), findings: measured.violations.map((item) => finding(`cycles/${item.rule}`, `${item.from} -> ${item.to}`, "Circular or forbidden dependency", item.severity === "error" ? "error" : item.severity === "warn" ? "warning" : "info")), notes, tool: toolMetadata(depcruiseBinPath(cwd), "dependency-cruiser"), configs: configs(cwd, [configPath ?? cruiseConfigPath(cwd)]) });
 }
 function dupeEvidence(cwd, configPath) {
     const measured = runDupes(cwd, configPath);

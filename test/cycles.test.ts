@@ -87,4 +87,28 @@ describe("cycles gate", () => {
       fs.rmSync(dir, { recursive: true, force: true });
     }
   }, 60_000);
+
+  test("runCycles reports cycles despite unresolved imports (warns, doesn't throw)", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "abacus-cycles-test-"));
+    try {
+      const src = path.join(dir, "src");
+      fs.mkdirSync(src);
+      // a <-> b cycle, plus c importing a non-existent module (unresolved)
+      fs.writeFileSync(path.join(src, "a.ts"), 'import { b } from "./b.js";\nexport const a = b + 1;\n');
+      fs.writeFileSync(path.join(src, "b.ts"), 'import { a } from "./a.js";\nexport const b = a + 1;\n');
+      fs.writeFileSync(path.join(src, "c.ts"), 'import { x } from "./does-not-exist.js";\nexport const c = x;\n');
+      fs.writeFileSync(
+        path.join(dir, "tsconfig.json"),
+        JSON.stringify({ compilerOptions: { moduleResolution: "Bundler" } }),
+      );
+      const result = runCycles(dir);
+      // The cycle is still found; unresolved imports are counted, not fatal.
+      expect(result.clean).toBe(false);
+      expect(result.violations.length).toBeGreaterThan(0);
+      expect(result.unresolved).toBeGreaterThan(0);
+      expect(result.violations.flatMap((v) => v.cycle).join(" ")).toMatch(/a\.ts/);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  }, 60_000);
 });

@@ -9,6 +9,8 @@ export interface CyclesResult {
     clean: boolean;
     violations: CycleViolation[];
     files: number;
+    /** Imports dependency-cruiser could not resolve; cycle coverage may be incomplete. */
+    unresolved: number;
 }
 /** Project's depcruise if installed, else the one bundled with abacus. */
 export declare function depcruiseBinPath(cwd?: string): string;

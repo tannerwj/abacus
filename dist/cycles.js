@@ -12,7 +12,6 @@ import { fileURLToPath } from "node:url";
 import { nodeToolBinPath, runNodeTool } from "./tool-runner.js";
 import { parseGraphReport } from "./dependency-graph.js";
 import { assertProjectPath } from "./config.js";
-import { AdapterFailure } from "./evidence.js";
 /** Project's depcruise if installed, else the one bundled with abacus. */
 export function depcruiseBinPath(cwd = process.cwd()) {
     return nodeToolBinPath("dependency-cruiser", "depcruise", cwd);
@@ -44,8 +43,15 @@ function validateGraphInputs(report, cwd) {
             assertProjectPath(cwd, module.source, "Cycle graph source");
     if (!report.summary.ruleSetUsed.forbidden.length)
         throw new Error("Cycle graph has no forbidden native rules");
-    if (report.modules.some((item) => item.dependencies.some((dependency) => dependency.couldNotResolve)))
-        throw new AdapterFailure("unresolved-imports");
+    // Count unresolved imports instead of failing: report the cycles we *can*
+    // see, and warn that coverage may be incomplete. A hard error here trades
+    // a true positive ("1 cycle found") for "error: unresolved imports".
+    let unresolved = 0;
+    for (const item of report.modules)
+        for (const dependency of item.dependencies)
+            if (dependency.couldNotResolve)
+                unresolved++;
+    return unresolved;
 }
 export function runCycles(cwd = process.cwd(), configPath) {
     const bin = depcruiseBinPath(cwd);
@@ -61,7 +67,7 @@ export function runCycles(cwd = process.cwd(), configPath) {
     if (!text)
         throw new Error(`depcruise produced no output (stderr: ${(out.stderr ?? "").slice(0, 500)})`);
     const report = parseGraphReport(text, out.status ?? -1);
-    validateGraphInputs(report, cwd);
+    const unresolved = validateGraphInputs(report, cwd);
     const violations = (report.summary?.violations ?? []).map((v) => ({
         from: v.from,
         to: v.to ?? v.from,
@@ -71,11 +77,14 @@ export function runCycles(cwd = process.cwd(), configPath) {
     }));
     if (out.status !== 0 && violations.length === 0)
         throw new Error("depcruise exited nonzero without graph violations");
-    return { clean: !violations.some((item) => item.severity === "error"), violations, files: report.modules.length };
+    return { clean: !violations.some((item) => item.severity === "error"), violations, files: report.modules.length, unresolved };
 }
 /** Human-readable report. Returns true when no cycles were found. */
 export function reportCycles(cwd = process.cwd()) {
     const result = runCycles(cwd);
+    if (result.unresolved > 0) {
+        console.log(`Cycles — warning: ${result.unresolved} import${result.unresolved === 1 ? "" : "s"} could not be resolved; cycle coverage may be incomplete.\n`);
+    }
     if (result.clean) {
         console.log("Cycles — no circular dependencies.\n");
         return true;
