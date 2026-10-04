@@ -8,7 +8,7 @@
  */
 import fs from "node:fs";
 import path from "node:path";
-const TODO_PATTERN = /\b(TODO|FIXME|HACK|XXX)\b\s*[(:\[]?\s*(\d{4}-\d{2}-\d{2})?/i;
+const TODO_PATTERN = /\b(TODO|FIXME|HACK|XXX)\b\s*[(:[]?\s*(\d{4}-\d{2}-\d{2})?/i;
 const DATE_PATTERN = /(\d{4})-(\d{2})-(\d{2})/;
 const SOURCE_EXTENSIONS = new Set([
     ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".mts", ".cts",

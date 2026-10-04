@@ -18,7 +18,7 @@ describe("dupes gate", () => {
   test("jscpd binary resolves (project-local or bundled)", () => {
     const p = jscpdBinPath();
     expect(fs.existsSync(p)).toBe(true);
-    expect(p).toMatch(/jscpd(\.cmd|\.js)?$/);
+    expect(p).not.toContain(`${path.sep}.bin${path.sep}`);
   });
 
   test("thresholdFor defaults to 5 and reads .jscpd.json", () => {
@@ -46,6 +46,30 @@ describe("dupes gate", () => {
     const files = result.clones.flatMap((c) => [c.first.file, c.second.file]).join(" ");
     expect(files).toMatch(/a\.ts/);
     expect(files).toMatch(/b\.ts/);
+  }, 60_000);
+
+  test("runs the real project dependency despite pnpm Unix and Windows shims", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "abacus dupes % spaces &-"));
+    try {
+      fs.cpSync(fixtureDir, dir, { recursive: true });
+      const bin = jscpdBinPath();
+      // Locate the installed manifest rather than assuming jscpd's bin layout.
+      let packageDir = path.dirname(bin);
+      while (!fs.existsSync(path.join(packageDir, "package.json"))) packageDir = path.dirname(packageDir);
+      const modules = path.join(dir, "node_modules");
+      const shims = path.join(modules, ".bin");
+      fs.mkdirSync(shims, { recursive: true });
+      fs.symlinkSync(packageDir, path.join(modules, "jscpd"), process.platform === "win32" ? "junction" : "dir");
+      fs.writeFileSync(path.join(shims, "jscpd"), "#!/bin/sh\nexit 99\n");
+      fs.writeFileSync(path.join(shims, "jscpd.cmd"), "@ECHO OFF\r\nEXIT /B 99\r\n");
+      expect(jscpdBinPath(dir)).toBe(path.join(modules, "jscpd", path.relative(packageDir, bin)));
+      const result = runDupes(dir);
+      expect(result.clean).toBe(false);
+      expect(result.percentage).toBeGreaterThan(result.threshold);
+      expect(result.clones.length).toBeGreaterThan(0);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
   }, 60_000);
 
   test("runDupes is clean when nothing is duplicated", () => {

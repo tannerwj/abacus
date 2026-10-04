@@ -3,36 +3,196 @@
   "title": "abacus.config.json",
   "type": "object",
   "properties": {
-    "$schema": { "type": "string" },
-    "preset": { "enum": ["typescript", "cloudflare-worker", "vite-spa", "nextjs"] },
-    "roots": { "type": "array", "items": { "type": "string" }, "description": "Source roots scanned for ABC scores" },
-    "exclude": { "type": "array", "items": { "type": "string" }, "description": "Regex strings; matching paths skipped by ABC" },
+    "$schema": {
+      "type": "string"
+    },
+    "preset": {
+      "enum": [
+        "typescript",
+        "cloudflare-worker",
+        "vite-spa",
+        "nextjs"
+      ]
+    },
+    "roots": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Source roots scanned for ABC scores"
+    },
+    "exclude": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Regex strings; matching paths skipped by ABC"
+    },
     "abc": {
       "type": "object",
       "properties": {
-        "budget": { "type": "integer", "minimum": 1 },
-        "allow": { "type": "object", "additionalProperties": { "type": "object", "required": ["max", "why"], "properties": { "max": { "type": "integer" }, "why": { "type": "string", "minLength": 10 } } } }
+        "budget": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "allow": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "required": [
+              "max",
+              "why"
+            ],
+            "properties": {
+              "max": {
+                "type": "integer"
+              },
+              "why": {
+                "type": "string",
+                "minLength": 10
+              }
+            }
+          }
+        }
       }
     },
     "size": {
       "type": "object",
       "properties": {
-        "budgets": { "type": "array", "items": { "type": "object", "required": ["label", "dir", "match", "max"], "properties": { "label": { "type": "string" }, "dir": { "type": "string" }, "match": { "type": "string" }, "max": { "type": "integer" }, "mode": { "enum": ["sum", "largest"] } } } },
-        "worker": { "type": "object", "required": ["max"], "properties": { "max": { "type": "integer" }, "wranglerArgs": { "type": "array", "items": { "type": "string" } } } }
+        "budgets": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "label",
+              "dir",
+              "match",
+              "max"
+            ],
+            "properties": {
+              "label": {
+                "type": "string"
+              },
+              "dir": {
+                "type": "string"
+              },
+              "match": {
+                "type": "string"
+              },
+              "max": {
+                "type": "integer"
+              },
+              "mode": {
+                "enum": [
+                  "sum",
+                  "largest"
+                ]
+              },
+              "allowEmpty": {
+                "type": "boolean",
+                "default": false,
+                "description": "Explicitly allow zero matching assets for this optional budget"
+              }
+            }
+          }
+        },
+        "worker": {
+          "type": "object",
+          "required": [
+            "max"
+          ],
+          "properties": {
+            "max": {
+              "type": "integer"
+            },
+            "wranglerArgs": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        }
       }
     },
     "ratchet": {
       "type": "object",
       "properties": {
-        "file": { "type": "string", "description": "Snapshot file written by `abacus ratchet --write`" },
+        "file": {
+          "type": "string",
+          "description": "Snapshot file written by `abacus ratchet --write`"
+        },
         "metrics": {
           "type": "object",
           "properties": {
-            "loc": { "type": "object", "required": ["roots"], "properties": { "roots": { "type": "array", "items": { "type": "string" } }, "slack": { "type": "number", "minimum": 0 } } },
-            "oxlintWarnings": { "type": "boolean" },
-            "abcMax": { "type": "boolean" },
-            "comments": { "type": "object", "required": ["roots"], "properties": { "roots": { "type": "array", "items": { "type": "string" } }, "max": { "type": "number", "minimum": 0 } } }
+            "loc": {
+              "type": "object",
+              "required": [
+                "roots"
+              ],
+              "properties": {
+                "roots": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "slack": {
+                  "type": "number",
+                  "minimum": 0
+                }
+              }
+            },
+            "oxlintWarnings": {
+              "type": "boolean"
+            },
+            "abcMax": {
+              "type": "boolean"
+            },
+            "comments": {
+              "type": "object",
+              "required": [
+                "roots"
+              ],
+              "properties": {
+                "roots": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "max": {
+                  "type": "number",
+                  "minimum": 0
+                }
+              }
+            }
           }
+        }
+      }
+    },
+    "check": {
+      "type": "object",
+      "properties": {
+        "gates": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "lint",
+              "abc",
+              "ratchet",
+              "tsc",
+              "deadcode",
+              "secrets",
+              "cycles",
+              "dupes",
+              "todos",
+              "size"
+            ]
+          },
+          "description": "Aggregate gates; defaults to lint, abc, ratchet. New source gates are opt-in; size runs after build."
         }
       }
     }

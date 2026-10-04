@@ -36,9 +36,9 @@ export function tscBinPath(cwd = process.cwd()): string {
 
 /** Resolve the effective tsconfig (following `extends`) via the TS API. Exported for tests. */
 export function effectiveOptions(cwd = process.cwd()): { options: Record<string, unknown>; configPath?: string } {
-  const configPath = ts.findConfigFile(cwd, ts.sys.fileExists, "tsconfig.json");
+  const configPath = ts.findConfigFile(cwd, (file) => ts.sys.fileExists(file), "tsconfig.json");
   if (!configPath) return { options: {} };
-  const configFile = ts.readConfigFile(configPath, ts.sys.readFile);
+  const configFile = ts.readConfigFile(configPath, (file) => ts.sys.readFile(file));
   if (configFile.error) return { options: {}, configPath };
   const parsed = ts.parseJsonConfigFileContent(configFile.config, ts.sys, path.dirname(configPath));
   return { options: parsed.options as Record<string, unknown>, configPath };

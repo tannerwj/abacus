@@ -1,4 +1,8 @@
 export type Preset = "typescript" | "cloudflare-worker" | "vite-spa" | "nextjs";
+export declare const CHECK_GATES: readonly ["lint", "abc", "ratchet", "tsc", "deadcode", "secrets", "cycles", "dupes", "todos", "size"];
+export type CheckGate = typeof CHECK_GATES[number];
+/** Source gates can run before a build. Size remains an explicit post-build gate. */
+export declare const SOURCE_GATES: CheckGate[];
 export interface SizeBudget {
     label: string;
     /** Directory holding built assets, relative to the repo root. */
@@ -9,6 +13,8 @@ export interface SizeBudget {
     max: number;
     /** `sum` (default) adds every matching file; `largest` gates the biggest single file. */
     mode?: "sum" | "largest";
+    /** Permit no matching built files for an optional asset budget (default false). */
+    allowEmpty?: boolean;
 }
 export interface RatchetConfig {
     /** Snapshot file, committed to the repo. */
@@ -32,6 +38,10 @@ export interface RatchetConfig {
 }
 export interface AbacusConfig {
     preset: Preset;
+    /** Gates selected by `abacus check`; new source gates are opt-in. */
+    check: {
+        gates: CheckGate[];
+    };
     /** Source roots scanned for ABC scores. */
     roots: string[];
     /** Regex strings; matching paths are skipped by the ABC scan (generated/vendored code). */
@@ -57,3 +67,4 @@ export interface AbacusConfig {
 export declare const CONFIG_FILE = "abacus.config.json";
 export declare function defaults(preset: Preset): AbacusConfig;
 export declare function loadConfig(cwd?: string): AbacusConfig;
+export declare function validateCheckGates(gates: unknown): CheckGate[];
