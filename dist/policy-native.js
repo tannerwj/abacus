@@ -124,8 +124,10 @@ export function validateNativeClosure(root, files) {
                     reference(file, ref);
             else if (key === "$ref" && typeof entry === "string" && !entry.startsWith("#"))
                 reference(file, entry.split("#")[0]);
-            else if (["tsConfig", "webpackConfig"].includes(key) && entry && typeof entry === "object" && "fileName" in entry)
+            else if (["tsConfig", "webpackConfig", "babelConfig"].includes(key) && entry && typeof entry === "object" && "fileName" in entry) {
                 reference(file, entry.fileName);
+                throw new Error("shared native resolution-file inputs are unsupported; use an inspectable repository-local config");
+            }
             else
                 visitJson(file, entry);
         }

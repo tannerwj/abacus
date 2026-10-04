@@ -1,0 +1,54 @@
+import fs from "node:fs";
+import path from "node:path";
+import ts from "typescript";
+import { assertProjectPath } from "./config.js";
+import { digest } from "./evidence.js";
+
+export interface CompilerInputs {
+  options: Record<string, unknown>;
+  configPath?: string;
+  configs: Array<{ path: string; digest: string }>;
+  incompleteReason?: string;
+}
+function inside(root: string, file: string): boolean {
+  const relative = path.relative(path.resolve(root), path.resolve(file));
+  return relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);
+}
+export function assertCompilerSource(cwd: string, file: string): void {
+  assertProjectPath(cwd, file, "Compiler input");
+  if (fs.existsSync(file) && !inside(fs.realpathSync(cwd), fs.realpathSync(file))) throw new Error("Compiler symlink input leaves the evaluated project tree");
+}
+/** Inspect actual extends reads without allowing an implicit parent project or external files. */
+export function inspectCompilerInputs(cwd: string, project = "tsconfig.json"): CompilerInputs {
+  cwd = path.resolve(cwd);
+  const configPath = path.resolve(cwd, project);
+  if (!fs.existsSync(configPath)) return { options: {}, configs: [] };
+  const configs = new Map<string, { path: string; digest: string }>();
+  let configError = false;
+  try {
+    assertCompilerSource(cwd, configPath);
+    const host: ts.ParseConfigFileHost = {
+      ...ts.sys,
+      getCurrentDirectory: () => cwd,
+      readFile(file) {
+        assertCompilerSource(cwd, file);
+        const content = ts.sys.readFile(file);
+        if (content !== undefined) configs.set(file, { path: file, digest: digest(content) });
+        return content;
+      },
+      fileExists(file) { return inside(cwd, file) && ts.sys.fileExists(file); },
+      directoryExists(dir) { return inside(cwd, dir) && ts.sys.directoryExists(dir); },
+      readDirectory(dir, extensions, excludes, includes, depth) {
+        assertCompilerSource(cwd, dir);
+        return ts.sys.readDirectory(dir, extensions, excludes, includes, depth);
+      },
+      onUnRecoverableConfigFileDiagnostic() { configError = true; },
+    };
+    const parsed = ts.getParsedCommandLineOfConfigFile(configPath, {}, host);
+    if (!parsed || configError || parsed.errors.length) return { options: {}, configPath, configs: [...configs.values()], incompleteReason: "Compiler configuration could not establish complete project inputs" };
+    for (const file of parsed.fileNames) assertCompilerSource(cwd, file);
+    return { options: parsed.options as Record<string, unknown>, configPath, configs: [...configs.values()] };
+  } catch {
+    return { options: {}, configPath, configs: [...configs.values()], incompleteReason: "Compiler source or configuration inputs leave the evaluated project tree" };
+  }
+}

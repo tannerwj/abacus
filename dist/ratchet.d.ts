@@ -14,5 +14,7 @@ export declare function countLines(text: string): {
 /** Prefer the repo's own binary so this works outside `pnpm run` too. */
 export declare function localBin(name: string, cwd?: string): string;
 export declare function measureRatchet(config: AbacusConfig, cwd?: string): Metric[];
+export declare function enabledMetricKeys(config: AbacusConfig): string[];
+export declare function readSnapshot(file: string, keys: string[]): Snapshot | string;
 export declare function reportRatchet(config: AbacusConfig, write: boolean, cwd?: string): boolean;
 export {};

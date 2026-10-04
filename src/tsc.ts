@@ -8,8 +8,11 @@
  * decision, recorded in its tsconfig.
  */
 import path from "node:path";
-import ts from "typescript";
+import fs from "node:fs";
+import os from "node:os";
 import { nodeToolBinPath, runNodeTool } from "./tool-runner.js";
+import { assertCompilerSource, inspectCompilerInputs } from "./compiler-inputs.js";
+import { digest } from "./evidence.js";
 
 export interface TscResult {
   /** true when tsc reported zero errors */
@@ -21,6 +24,10 @@ export interface TscResult {
   /** tsconfig path used, if any */
   configPath?: string;
   files: number;
+  configs: Array<{ path: string; digest: string }>;
+  sources: Array<{ path: string; digest: string }>;
+  dependencies: Array<{ path: string; digest: string }>;
+  incompleteReason?: string;
 }
 
 /** Project's tsc if installed, else the TypeScript bundled with abacus. */
@@ -30,23 +37,35 @@ export function tscBinPath(cwd = process.cwd()): string {
 
 /** Resolve the effective tsconfig (following `extends`) via the TS API. Exported for tests. */
 export function effectiveOptions(cwd = process.cwd()): { options: Record<string, unknown>; configPath?: string } {
-  const configPath = ts.findConfigFile(cwd, (file) => ts.sys.fileExists(file), "tsconfig.json");
-  if (!configPath) return { options: {} };
-  const configFile = ts.readConfigFile(configPath, (file) => ts.sys.readFile(file));
-  if (configFile.error) return { options: {}, configPath };
-  const parsed = ts.parseJsonConfigFileContent(configFile.config, ts.sys, path.dirname(configPath));
-  return { options: parsed.options as Record<string, unknown>, configPath };
+  const { options, configPath } = inspectCompilerInputs(cwd);
+  return { options, configPath };
 }
 
-export function runTsc(cwd = process.cwd()): TscResult {
-  const { options, configPath } = effectiveOptions(cwd);
-  const out = runNodeTool(tscBinPath(cwd), ["--noEmit", "--pretty", "false", "--listFiles"], cwd);
+function compilerRun(cwd: string, project: string, incremental: boolean) {
+  const directory = incremental ? fs.mkdtempSync(path.join(os.tmpdir(), "abacus-tsc-cache-")) : undefined;
+  try {
+    const cacheArgs = directory ? ["--tsBuildInfoFile", path.join(directory, "check.tsbuildinfo")] : [];
+    return runNodeTool(tscBinPath(cwd), ["--project", path.resolve(cwd, project), "--noEmit", "--pretty", "false", "--listFiles", ...cacheArgs], cwd);
+  } finally { if (directory) fs.rmSync(directory, { recursive: true, force: true }); }
+}
+
+export function runTsc(cwd = process.cwd(), project = "tsconfig.json"): TscResult {
+  const inputs = inspectCompilerInputs(cwd, project);
+  const { options, configPath } = inputs;
+  if (!configPath || inputs.incompleteReason) return { ...inputs, clean: false, files: 0, errors: [], sources: [], dependencies: [] };
+  const out = compilerRun(cwd, project, options.incremental === true || options.composite === true);
   if (out.error) throw new Error(`tsc failed to run: ${out.error.message}`);
   const text = `${out.stdout ?? ""}\n${out.stderr ?? ""}`;
   const errors = text.split("\n").filter((l) => /error TS\d+/.test(l));
   if (out.status !== 0 && errors.length === 0) throw new Error("tsc failed without compiler diagnostics");
-  const files = text.split("\n").filter((line) => path.isAbsolute(line) && /\.[cm]?tsx?$/.test(line) && !line.includes(`${path.sep}node_modules${path.sep}`)).length;
-  return { clean: out.status === 0 && errors.length === 0, errors, options, configPath, files };
+  const allSources = [...new Set(text.split("\n").filter((line) => path.isAbsolute(line) && /\.(?:[cm]?[jt]sx?|json)$/u.test(line)))];
+  const projectSources = allSources.filter((file) => !file.split(/[\\/]/u).includes("node_modules"));
+  try { for (const file of projectSources) assertCompilerSource(cwd, file); }
+  catch { return { ...inputs, clean: false, errors: [], files: 0, sources: [], dependencies: [], incompleteReason: "The compiler followed source inputs outside the evaluated project tree" }; }
+  const entries = allSources.map((file) => ({ path: file, digest: digest(fs.readFileSync(file)) }));
+  const sources = entries.filter((entry) => !entry.path.split(/[\\/]/u).includes("node_modules"));
+  const dependencies = entries.filter((entry) => entry.path.split(/[\\/]/u).includes("node_modules"));
+  return { ...inputs, sources, dependencies, clean: out.status === 0 && errors.length === 0, errors, options, configPath, files: projectSources.length };
 }
 
 /** Beyond-`strict` flags worth adopting, with the one-line reason. */
@@ -69,6 +88,7 @@ export function reportTsc(cwd = process.cwd()): boolean {
     console.log("TypeScript — no tsconfig.json found; add one to get a real gate.\n");
     return false;
   }
+  if (result.incompleteReason) { console.log(`TypeScript — incomplete: ${result.incompleteReason}.\n`); return false; }
   if (!result.clean) {
     console.log(`TypeScript — ${result.errors.length} error${result.errors.length === 1 ? "" : "s"}:\n`);
     for (const e of result.errors.slice(0, 25)) console.log(`  ${e}`);

@@ -84,3 +84,17 @@ test("tsc runs the declared project CLI rather than platform .bin shims", () => 
     expect(runTsc(cwd)).toMatchObject({ clean: true, files: 1 });
   } finally { fs.rmSync(cwd, { recursive: true, force: true }); }
 });
+
+
+test("incremental compiler checks keep build info out of the source tree", () => {
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "abacus-tsc-incremental-"));
+  try {
+    fs.writeFileSync(path.join(cwd, "tsconfig.json"), JSON.stringify({ compilerOptions: { incremental: true, strict: true, types: [] }, files: ["index.ts"] }));
+    fs.writeFileSync(path.join(cwd, "index.ts"), "export const value = 1;");
+    expect(runTsc(cwd).clean).toBe(true);
+    expect(fs.existsSync(path.join(cwd, "tsconfig.tsbuildinfo"))).toBe(false);
+    fs.writeFileSync(path.join(cwd, "index.ts"), "export const value = 2;");
+    expect(runTsc(cwd).clean).toBe(true);
+    expect(fs.existsSync(path.join(cwd, "tsconfig.tsbuildinfo"))).toBe(false);
+  } finally { fs.rmSync(cwd, { recursive: true, force: true }); }
+}, 60_000);

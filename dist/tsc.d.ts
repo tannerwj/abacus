@@ -8,6 +8,19 @@ export interface TscResult {
     /** tsconfig path used, if any */
     configPath?: string;
     files: number;
+    configs: Array<{
+        path: string;
+        digest: string;
+    }>;
+    sources: Array<{
+        path: string;
+        digest: string;
+    }>;
+    dependencies: Array<{
+        path: string;
+        digest: string;
+    }>;
+    incompleteReason?: string;
 }
 /** Project's tsc if installed, else the TypeScript bundled with abacus. */
 export declare function tscBinPath(cwd?: string): string;
@@ -16,7 +29,7 @@ export declare function effectiveOptions(cwd?: string): {
     options: Record<string, unknown>;
     configPath?: string;
 };
-export declare function runTsc(cwd?: string): TscResult;
+export declare function runTsc(cwd?: string, project?: string): TscResult;
 /** Beyond-`strict` flags worth adopting, with the one-line reason. */
 export declare const STRICTNESS_FLAGS: Array<{
     flag: string;

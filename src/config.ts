@@ -49,6 +49,8 @@ export interface AbacusConfig {
   check: { gates: CheckGate[] };
   /** Source roots scanned for ABC scores. */
   roots: string[];
+  /** Each project is checked separately with its own platform/compiler options. */
+  tsc: { projects: string[] };
   /** Regex strings; matching paths are skipped by the ABC scan (generated/vendored code). */
   exclude: string[];
   abc: {
@@ -74,6 +76,7 @@ export function defaults(preset: Preset): AbacusConfig {
     preset,
     check: { gates: ["lint", "abc", "ratchet"] },
     roots: ["src", "scripts"],
+    tsc: { projects: ["tsconfig.json"] },
     exclude: ["\\.d\\.ts$", "\\.test\\.tsx?$", "/components/ui/"],
     abc: { budget: 60, allow: {} },
     size: { budgets: [] },
@@ -100,6 +103,7 @@ export function loadConfig(cwd = process.cwd()): AbacusConfig {
     preset: raw.preset ?? base.preset,
     check: loadCheck(raw.check, base.check),
     roots: raw.roots ?? base.roots,
+    tsc: loadTsc(raw.tsc, base.tsc),
     exclude: raw.exclude ?? base.exclude,
     abc: { budget: raw.abc?.budget ?? base.abc.budget, allow: raw.abc?.allow ?? {} },
     size: { budgets: raw.size?.budgets ?? base.size.budgets, worker: raw.size?.worker ?? base.size.worker },
@@ -155,6 +159,7 @@ export function assertProjectPath(cwd: string, input: string, label: string): vo
   if (relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) throw new Error(`${label} must stay within the evaluated project tree`);
 }
 export function validateProjectInputs(config: AbacusConfig, cwd: string): void {
+  for (const project of validateTscProjects(config.tsc.projects)) assertProjectPath(cwd, project, "TypeScript project");
   for (const root of [...config.roots, ...(config.ratchet.metrics.loc?.roots ?? []), ...(config.ratchet.metrics.comments?.roots ?? [])]) assertProjectPath(cwd, root, "Source root");
   for (const budget of config.size.budgets) assertProjectPath(cwd, budget.dir, "Built asset directory");
   assertProjectPath(cwd, config.ratchet.file, "Ratchet snapshot");
@@ -165,6 +170,8 @@ export function validateProjectInputs(config: AbacusConfig, cwd: string): void {
 export function validateAbacusConfig(config: AbacusConfig): void {
   if (!["typescript", "cloudflare-worker", "vite-spa", "nextjs"].includes(config.preset)) throw new Error("Invalid preset");
   validateCheckGates(config.check.gates);
+  if (!config.tsc) throw new Error("tsc must specify a projects list");
+  loadTsc(config.tsc, defaults(config.preset).tsc);
   stringList(config.roots, "roots"); stringList(config.exclude, "exclude");
   for (const expression of config.exclude) RegExp(expression, "u");
   finite(config.abc.budget, "abc.budget", 1);
@@ -191,4 +198,23 @@ function isCheckGate(gate: unknown): gate is CheckGate {
 
 function loadCheck(raw: AbacusConfig["check"] | undefined, base: AbacusConfig["check"]): AbacusConfig["check"] {
   return { gates: validateCheckGates(raw?.gates ?? base.gates) };
+}
+
+/** Local JSON project selectors only; executable arguments and reference builds are unsupported. */
+export function validateTscProjects(input: unknown, label = "tsc.projects"): string[] {
+  stringList(input, label);
+  if (!input.length) throw new Error(`${label} must be a nonempty unique list`);
+  const projects = input.map((project) => {
+    if (path.isAbsolute(project) || path.win32.isAbsolute(project) || /^[a-z]+:/iu.test(project) || project.includes("\\") || project.split("/").includes("..") || !project.endsWith(".json")) throw new Error(`${label} must contain local relative JSON config paths within the evaluated project tree`);
+    return path.posix.normalize(project);
+  });
+  if (new Set(projects).size !== projects.length) throw new Error(`${label} must be a nonempty unique list`);
+  return projects;
+}
+
+function loadTsc(raw: unknown, base: AbacusConfig["tsc"]): AbacusConfig["tsc"] {
+  if (raw === undefined) return structuredClone(base);
+  if (!raw || typeof raw !== "object" || Array.isArray(raw) || Object.keys(raw).some((key) => key !== "projects")) throw new Error("tsc supports only a projects list");
+  const projects = Reflect.get(raw, "projects");
+  return { projects: validateTscProjects(projects === undefined ? base.projects : projects) };
 }

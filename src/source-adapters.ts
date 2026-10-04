@@ -6,19 +6,19 @@ import { scoreProject } from "./abc.js";
 import type { AbacusConfig, CheckGate } from "./config.js";
 import { cruiseConfigPath, depcruiseBinPath, runCycles, sourceDir } from "./cycles.js";
 import { jscpdBinPath, runDupes } from "./dupes.js";
-import { digest, finding, type AdapterResult, type Finding } from "./evidence.js";
+import { AdapterFailure, digest, finding, type AdapterResult, type Finding } from "./evidence.js";
 import { knipBinPath } from "./deadcode.js";
-import { measureRatchet } from "./ratchet.js";
+import { enabledMetricKeys, measureRatchet, readSnapshot } from "./ratchet.js";
 import { gitleaksBinPath, scanSecretReport } from "./secrets.js";
 import { measureBudgets } from "./size.js";
 import { runTodos, sourceFiles } from "./todos.js";
 import { nodeToolBinPath, runNodeTool, toolMetadata } from "./tool-runner.js";
-import { runTsc } from "./tsc.js";
+import { typescriptEvidence } from "./typescript-profile.js";
 import { sharedLintIgnores } from "./lint-config.js";
 
 const scope = (kind: AdapterResult["scope"]["kind"], targets: string[], scanned: number, unit = "files") => ({ kind, targets, scanned, unit });
 const configs = (cwd: string, names: string[]) => names.filter((name) => fs.existsSync(path.resolve(cwd, name))).map((name) => ({ path: name, digest: digest(fs.readFileSync(path.resolve(cwd, name))) }));
-const checked = (result: AdapterResult): AdapterResult => result.scope.scanned === 0 && result.outcome === "pass" ? { ...result, outcome: "incomplete", notes: [...(result.notes ?? []), "No intended targets were scanned"] } : result;
+const checked = (result: AdapterResult): AdapterResult => result.scope.scanned === 0 && ["pass", "fail", "waived"].includes(result.outcome) ? { ...result, outcome: "incomplete", notes: [...(result.notes ?? []), "No intended targets were scanned"] } : result;
 const resultFor = (findings: Finding[]): AdapterResult["outcome"] => findings.some((item) => item.severity === "error") ? "fail" : "pass";
 const astTool = (name: string) => toolMetadata(createRequire(import.meta.url).resolve("typescript"), name);
 
@@ -58,11 +58,12 @@ function abcEvidence(config: AbacusConfig, cwd: string): AdapterResult {
 
 function ratchetEvidence(config: AbacusConfig, cwd: string): AdapterResult {
   if (config.ratchet.metrics.abcMax && scoreProject(config, cwd).files === 0) return { outcome: "incomplete", scope: scope("repository", config.roots, 0), findings: [], notes: ["ABC ratchet has no source targets"] };
+  const raw = readSnapshot(path.join(cwd, config.ratchet.file), enabledMetricKeys(config));
+  if (typeof raw === "string") throw new AdapterFailure(raw === "is missing" ? "missing-baseline" : "invalid-baseline");
   const measured = measureRatchet(config, cwd);
-  const raw: unknown = JSON.parse(fs.readFileSync(path.join(cwd, config.ratchet.file), "utf8"));
-  if (!measured.length || !raw || typeof raw !== "object" || Array.isArray(raw)) throw new Error("Invalid ratchet snapshot");
+  if (!measured.length) throw new Error("No ratchet metrics enabled");
   const findings = measured.flatMap((item) => {
-    const previous = Reflect.get(raw, item.key);
+    const previous = raw[item.key];
     if (typeof previous !== "number" || !Number.isFinite(previous) || previous < 0) throw new Error("Ratchet snapshot omits or invalidates an enabled metric");
     const maximum = Math.min(previous * (1 + item.slack), item.max ?? Infinity);
     return item.value > maximum ? [finding("ratchet/ceiling", item.key, `Metric ${item.value} exceeds ceiling ${maximum}`)] : [];
@@ -72,17 +73,6 @@ function ratchetEvidence(config: AbacusConfig, cwd: string): AdapterResult {
     if (!fs.existsSync(path.join(cwd, root)) || !sourceFiles(path.join(cwd, root)).length) return { outcome: "incomplete", scope: scope("repository", [root], 0), findings, notes: ["A ratchet root has no source targets"] };
   }
   return { outcome: resultFor(findings), scope: scope("repository", config.roots, measured.length, "metrics"), findings, metrics: Object.fromEntries(measured.map((item) => [item.key, item.value])), configs: configs(cwd, [config.ratchet.file, ".oxlintrc.json"]), tool: astTool("typescript/ratchet-v1"), tools: config.ratchet.metrics.oxlintWarnings ? [toolMetadata(nodeToolBinPath("oxlint", "oxlint", cwd), "oxlint")] : [] };
-}
-
-function tscEvidence(cwd: string): AdapterResult {
-  const measured = runTsc(cwd);
-  const findings = measured.errors.map((line, index) => {
-    const code = /error (TS\d+)/u.exec(line)?.[1] ?? "compiler";
-    const subject = /^(.+?)\(\d+,\d+\)/u.exec(line)?.[1] ?? `config #${index + 1}`;
-    return finding(`tsc/${code}`, `${subject} #${index + 1}`, `TypeScript ${code}`);
-  });
-  const outcome = !measured.configPath ? "not-applicable" : measured.clean ? "pass" : "fail";
-  return checked({ outcome, scope: scope("repository", ["tsconfig.json"], measured.files), findings, tool: toolMetadata(nodeToolBinPath("typescript", "tsc", cwd), "typescript"), configs: configs(cwd, ["tsconfig.json"]), notes: !measured.configPath ? ["No tsconfig.json"] : [] });
 }
 
 function deadcodeEvidence(cwd: string, configPath?: string): AdapterResult {
@@ -129,7 +119,7 @@ function sizeEvidence(config: AbacusConfig, cwd: string): AdapterResult {
 export function runSourceAdapter(gate: CheckGate, config: AbacusConfig, cwd: string, evaluatedAt: string, nativeConfig?: string): AdapterResult {
   if (nativeConfig && !["lint", "deadcode", "secrets", "cycles", "dupes"].includes(gate)) throw new Error(`Pack nativeConfig for ${gate} is unsupported; use repository config`);
   const runners: Record<CheckGate, () => AdapterResult> = {
-    lint: () => lintEvidence(cwd, nativeConfig), abc: () => abcEvidence(config, cwd), ratchet: () => ratchetEvidence(config, cwd), tsc: () => tscEvidence(cwd), deadcode: () => deadcodeEvidence(cwd, nativeConfig), secrets: () => secretEvidence(cwd, nativeConfig), cycles: () => cycleEvidence(cwd, nativeConfig), dupes: () => dupeEvidence(cwd, nativeConfig), todos: () => todoEvidence(cwd, evaluatedAt), size: () => sizeEvidence(config, cwd),
+    lint: () => lintEvidence(cwd, nativeConfig), abc: () => abcEvidence(config, cwd), ratchet: () => ratchetEvidence(config, cwd), tsc: () => typescriptEvidence(config, cwd), deadcode: () => deadcodeEvidence(cwd, nativeConfig), secrets: () => secretEvidence(cwd, nativeConfig), cycles: () => cycleEvidence(cwd, nativeConfig), dupes: () => dupeEvidence(cwd, nativeConfig), todos: () => todoEvidence(cwd, evaluatedAt), size: () => sizeEvidence(config, cwd),
   };
   return runners[gate]();
 }

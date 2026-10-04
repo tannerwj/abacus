@@ -94,7 +94,10 @@ export function validateNativeClosure(root: string, files: string[]): void {
       if (key === "jsPlugins" && (Array.isArray(entry) ? entry.length > 0 : entry !== undefined && entry !== null)) throw new Error("pinned native jsPlugins are unsupported; executable plugins are outside the digest closure");
       if (key === "extends") for (const ref of Array.isArray(entry) ? entry : [entry]) reference(file, ref);
       else if (key === "$ref" && typeof entry === "string" && !entry.startsWith("#")) reference(file, entry.split("#")[0]);
-      else if (["tsConfig", "webpackConfig"].includes(key) && entry && typeof entry === "object" && "fileName" in entry) reference(file, entry.fileName);
+      else if (["tsConfig", "webpackConfig", "babelConfig"].includes(key) && entry && typeof entry === "object" && "fileName" in entry) {
+        reference(file, entry.fileName);
+        throw new Error("shared native resolution-file inputs are unsupported; use an inspectable repository-local config");
+      }
       else visitJson(file, entry);
     }
   };

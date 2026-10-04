@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { bundledFile, relativeFile, validateNativeClosure } from "./policy-native.js";
-import { CHECK_GATES, type AbacusConfig } from "./config.js";
+import { CHECK_GATES, validateTscProjects, type AbacusConfig } from "./config.js";
 import { digest, finding, type AdapterResult, type CheckEvidence, type Enforcement, type Finding } from "./evidence.js";
 
 export const POLICY_GATES = [...CHECK_GATES, "architecture", "package"] as const;
@@ -131,6 +131,7 @@ export function validatePolicyParameters(value: unknown): PolicyParameters {
     preset: (input, name) => enumeration(input, ["typescript", "cloudflare-worker", "vite-spa", "nextjs"], name),
     roots: list, exclude: (input, name) => { list(input, name); for (const expr of input) { try { new RegExp(expr).test(""); } catch { throw new Error(`${name} must contain valid regex strings`); } } },
     abc: abcParameters, size: sizeParameters, ratchet: ratchetParameters,
+    tsc: (input, name) => settings(input, { projects: (val, key) => { validateTscProjects(val, key); } }, name),
     architecture: (input, name) => settings(input, { targets: list }, name), package: packageParameters,
   }, "parameters");
   return structuredClone(value) as PolicyParameters;

@@ -71,7 +71,7 @@ export function measureRatchet(config: AbacusConfig, cwd = process.cwd()): Metri
   return metrics;
 }
 
-function enabledMetricKeys(config: AbacusConfig): string[] {
+export function enabledMetricKeys(config: AbacusConfig): string[] {
   const m = config.ratchet.metrics;
   return [
     ...(m.loc?.roots ?? []).map((root) => `loc ${root}`),
@@ -81,7 +81,7 @@ function enabledMetricKeys(config: AbacusConfig): string[] {
   ];
 }
 
-function readSnapshot(file: string, keys: string[]): Snapshot | string {
+export function readSnapshot(file: string, keys: string[]): Snapshot | string {
   if (!fs.existsSync(file)) return "is missing";
   let snapshot: unknown;
   try { snapshot = JSON.parse(fs.readFileSync(file, "utf8")); }

@@ -88,7 +88,7 @@ export function measureRatchet(config, cwd = process.cwd()) {
         metrics.push({ key: "oxlintWarnings", value: oxlintCount(cwd), slack: 0 });
     return metrics;
 }
-function enabledMetricKeys(config) {
+export function enabledMetricKeys(config) {
     const m = config.ratchet.metrics;
     return [
         ...(m.loc?.roots ?? []).map((root) => `loc ${root}`),
@@ -97,7 +97,7 @@ function enabledMetricKeys(config) {
         ...(m.oxlintWarnings ? ["oxlintWarnings"] : [])
     ];
 }
-function readSnapshot(file, keys) {
+export function readSnapshot(file, keys) {
     if (!fs.existsSync(file))
         return "is missing";
     let snapshot;

@@ -45,6 +45,10 @@ export interface AbacusConfig {
     };
     /** Source roots scanned for ABC scores. */
     roots: string[];
+    /** Each project is checked separately with its own platform/compiler options. */
+    tsc: {
+        projects: string[];
+    };
     /** Regex strings; matching paths are skipped by the ABC scan (generated/vendored code). */
     exclude: string[];
     abc: {
@@ -80,3 +84,5 @@ export declare function validateProjectInputs(config: AbacusConfig, cwd: string)
 /** Runtime validation matters: JSON values do not acquire TypeScript's guarantees. */
 export declare function validateAbacusConfig(config: AbacusConfig): void;
 export declare function validateCheckGates(gates: unknown): CheckGate[];
+/** Local JSON project selectors only; executable arguments and reference builds are unsupported. */
+export declare function validateTscProjects(input: unknown, label?: string): string[];

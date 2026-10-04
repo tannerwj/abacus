@@ -9,6 +9,39 @@ export interface Finding {
     fingerprint: string;
     severity: "error" | "warning" | "info";
     exceptionId?: string;
+    /** Explicit compiler-project context; no raw diagnostic text. */
+    project?: string;
+}
+export interface CompilerDiagnostic {
+    code: string;
+    location?: {
+        path: string;
+        line: number;
+        column: number;
+    };
+}
+export interface CompilerProjectEvidence {
+    project: string;
+    outcome: Outcome;
+    scope: AdapterResult["scope"];
+    diagnostics: CompilerDiagnostic[];
+    configs: Array<{
+        path: string;
+        digest: string;
+    }>;
+    /** Local, non-dependency source inputs reported by the actual compiler. */
+    sources: Array<{
+        path: string;
+        digest: string;
+    }>;
+    /** Actual installed declaration/compiler library inputs, excluded from source coverage. */
+    dependencies: Array<{
+        path: string;
+        digest: string;
+    }>;
+    /** Project selector and sorted config/source byte fingerprints, when complete. */
+    inputDigest?: string;
+    notes?: string[];
 }
 export interface AdapterResult {
     outcome: Outcome;
@@ -36,6 +69,21 @@ export interface AdapterResult {
         path: string;
         digest: string;
     }>;
+    /** Independent compiler outcomes, retained even when another project is successful. */
+    projects?: CompilerProjectEvidence[];
+    errorCode?: AdapterFailureCode;
+}
+declare const SAFE_FAILURE_MESSAGES: {
+    readonly "missing-baseline": "Committed ratchet baseline is missing. Create it only as an explicit reviewed baseline decision.";
+    readonly "invalid-baseline": "Committed ratchet baseline is malformed or has invalid/missing metric values. Normal checks do not repair it.";
+    readonly "unresolved-imports": "Dependency graph contains unresolved imports. Check aliases and runtime-specific modules in the native configuration.";
+    readonly "unsupported-native-config": "The pinned native configuration uses an unsupported profile feature. Repository-local native configuration remains available.";
+};
+export type AdapterFailureCode = keyof typeof SAFE_FAILURE_MESSAGES;
+/** Only known safe causes cross the tool boundary; arbitrary stderr remains private. */
+export declare class AdapterFailure extends Error {
+    readonly code: AdapterFailureCode;
+    constructor(code: AdapterFailureCode);
 }
 export interface CheckEvidence extends AdapterResult {
     id: string;
@@ -79,3 +127,4 @@ export interface RunEvidence {
 export declare function digest(value: string | Uint8Array): string;
 export declare function finding(ruleId: string, subject: string, message: string, severity?: Finding["severity"]): Finding;
 export declare function validateAdapterResult(result: AdapterResult): void;
+export {};

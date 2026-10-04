@@ -6,6 +6,7 @@ import { defaults, loadConfig } from "../src/config.js";
 import { digest, finding, type AdapterResult } from "../src/evidence.js";
 import { evaluatePolicy } from "../src/policy-runner.js";
 import { computePolicyPackDigest, resolvePolicyPack, type PolicyPack } from "../src/policy.js";
+import { reportRatchet } from "../src/ratchet.js";
 import { runSourceAdapter } from "../src/source-adapters.js";
 
 const at = "2026-10-04T07:00:00.000Z";
@@ -55,7 +56,7 @@ describe("trustworthy evidence", () => {
     const value = config(); value.check.gates = ["ratchet"];
     const run = evaluatePolicy(value, cwd, { evaluatedAt: at });
     expect(run.clean).toBe(false);
-    expect(run.checks[0].outcome).toBe("error");
+    expect(run.checks[0]).toMatchObject({ outcome: "error", errorCode: "missing-baseline", notes: [expect.stringContaining("baseline is missing")] });
     expect(fs.existsSync(path.join(cwd, value.ratchet.file))).toBe(false);
   });
 
@@ -143,6 +144,40 @@ describe("trustworthy evidence", () => {
     fs.writeFileSync(file, "export const value = 2;");
     const after = evaluatePolicy(config(), cwd, { evaluatedAt: at, adapter: cleanResult });
     expect(before.source.treeDigest).not.toBe(after.source.treeDigest);
+  });
+
+  test("compiler sources outside the declared project tree are incomplete", () => {
+    const external = path.join(path.dirname(cwd), `${path.basename(cwd)}-external.ts`);
+    try {
+      fs.writeFileSync(external, "export const value: number = 1;\n");
+      fs.writeFileSync(path.join(cwd, "tsconfig.json"), JSON.stringify({ compilerOptions: { strict: true, types: [] }, files: [external] }));
+      const value = config(); value.check.gates = ["tsc"];
+      const before = evaluatePolicy(value, cwd, { evaluatedAt: at });
+      fs.writeFileSync(external, "export const value: number = 'wrong';\n");
+      const after = evaluatePolicy(value, cwd, { evaluatedAt: at });
+      expect(before.checks[0]).toMatchObject({ outcome: "incomplete", blocking: true });
+      expect(after.checks[0]).toMatchObject({ outcome: "incomplete", blocking: true });
+      expect(before.source.treeDigest).toBe(after.source.treeDigest);
+    } finally { fs.rmSync(external, { force: true }); }
+  }, 60_000);
+
+  test("corrupt disabled ratchet entries fail aggregate and standalone validation equally", () => {
+    const value = config(); value.check.gates = ["ratchet"]; value.ratchet.metrics = { loc: { roots: ["src"] } };
+    const file = path.join(cwd, value.ratchet.file); const contents = JSON.stringify({ "loc src": 1, oldMetric: "corrupt" });
+    fs.writeFileSync(file, contents);
+    expect(reportRatchet(value, false, cwd)).toBe(false);
+    expect(evaluatePolicy(value, cwd, { evaluatedAt: at }).checks[0]).toMatchObject({ outcome: "error", blocking: true });
+    expect(fs.readFileSync(file, "utf8")).toBe(contents);
+  });
+
+  test("required zero-target failures cannot be green through advisory enforcement or exact waivers", () => {
+    const value = config();
+    const pack: PolicyPack = { schemaVersion: 1, name: "zero-target", version: "1.0.0", compatibility: { adapterVersion: 1, evidenceSchemaVersion: 1 }, checks: [{ id: "compiler", gate: "tsc", required: true, enforcement: "warn", severity: "error", rationale: "Require actual compiler coverage" }] };
+    const file = path.join(cwd, "policy.json"); fs.writeFileSync(file, JSON.stringify(pack));
+    value.policy = { pack: { path: "policy.json", version: "1.0.0", digest: computePolicyPackDigest(file) }, exceptions: [{ id: "empty-project", ruleId: "tsc/TS18002", subject: "tsconfig.json #1", owner: "maintainers", reason: "This waiver cannot grant missing coverage", expires: "2026-11-01" }] };
+    const run = evaluatePolicy(value, cwd, { evaluatedAt: at, adapter: () => ({ outcome: "fail", scope: { kind: "repository", targets: ["tsconfig.json"], scanned: 0, unit: "files" }, findings: [finding("tsc/TS18002", "tsconfig.json #1", "Empty project")] }) });
+    expect(run.clean).toBe(false);
+    expect(run.checks[0]).toMatchObject({ outcome: "incomplete", blocking: true });
   });
 
 });

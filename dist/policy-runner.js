@@ -2,7 +2,7 @@ import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 import { runArchitecture } from "./architecture.js";
 import { CHECK_GATES, validateAbacusConfig, validateCheckGates, validateProjectInputs } from "./config.js";
-import { digest, finding, validateAdapterResult } from "./evidence.js";
+import { AdapterFailure, digest, finding, validateAdapterResult } from "./evidence.js";
 import { runPackageValidation } from "./package-validation.js";
 import { applyExceptions, applyPolicyParameters, assertPolicyCompatibility, expiredExceptions, resolvePolicyPack, validateExceptions } from "./policy.js";
 import { sourceProvenance } from "./provenance.js";
@@ -85,12 +85,12 @@ export function evaluatePolicy(config, cwd = process.cwd(), options = {}) {
             const closure = nativeConfig ? policy?.nativeFiles ?? [] : [];
             const configEntries = [...(result.configs ?? []), ...closure, { path: "abacus:resolved-config", digest: digest(JSON.stringify(effectiveConfig)) }];
             result.configs = [...new Map(configEntries.map((entry) => [JSON.stringify([entry.path, entry.digest]), entry])).values()];
-            if (result.outcome === "pass" && result.scope.scanned === 0)
+            if (["pass", "fail", "waived"].includes(result.outcome) && result.scope.scanned === 0)
                 result = { ...result, outcome: "incomplete", notes: [...(result.notes ?? []), "No targets scanned"] };
         }
-        catch {
+        catch (error) {
             // Tool stderr and diagnostic text may contain source snippets or secrets.
-            result = { outcome: "error", scope: { kind: "repository", targets: ["."], scanned: 0, unit: "unknown" }, findings: [], notes: ["Adapter failed. Check installed tools, inputs, native config and supported paths."] };
+            result = { outcome: "error", scope: { kind: "repository", targets: ["."], scanned: 0, unit: "unknown" }, findings: [], ...(error instanceof AdapterFailure ? { errorCode: error.code } : {}), notes: [error instanceof AdapterFailure ? error.message : "Adapter failed. Check installed tools, inputs, native config and supported paths."] };
         }
         return applyExceptions(checkEvidence(check, result), activeExceptions, evaluatedAt);
     });
