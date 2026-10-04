@@ -9,6 +9,10 @@ export interface SecretFinding {
 /** Path to the gitleaks binary bundled with abacus, resolved relative to this module. */
 export declare function gitleaksBinPath(): string;
 /** Run gitleaks detect on the working tree. Secret values are dropped, never returned. */
+export declare function scanSecretReport(cwd?: string, configPath?: string): {
+    findings: SecretFinding[];
+    bytes: number;
+};
 export declare function scanSecrets(cwd?: string): SecretFinding[];
 /** Human-readable report. Returns true when clean (no findings). */
 export declare function reportSecrets(cwd?: string): boolean;

@@ -1,4 +1,4 @@
-import type { AbacusConfig } from "./config.js";
+import { type AbacusConfig } from "./config.js";
 export declare function gzipSize(file: string): number;
 export interface SizeResult {
     label: string;
@@ -6,6 +6,7 @@ export interface SizeResult {
     max: number;
     ok: boolean;
     error?: string;
+    files: number;
 }
 export declare function measureBudgets(config: AbacusConfig, cwd?: string): SizeResult[];
 export declare function reportSize(config: AbacusConfig, cwd?: string): boolean;

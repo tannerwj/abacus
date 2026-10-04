@@ -44,7 +44,7 @@ interface GitleaksJson {
 }
 
 /** Run gitleaks detect on the working tree. Secret values are dropped, never returned. */
-export function scanSecrets(cwd = process.cwd()): SecretFinding[] {
+export function scanSecretReport(cwd = process.cwd(), configPath?: string): { findings: SecretFinding[]; bytes: number } {
   const reportPath = path.join(
     fs.mkdtempSync(path.join(os.tmpdir(), "abacus-secrets-")),
     "report.json",
@@ -52,26 +52,34 @@ export function scanSecrets(cwd = process.cwd()): SecretFinding[] {
   try {
     const out = spawnSync(
       gitleaksBinPath(),
-      ["detect", "--source", cwd, "--report-format", "json", "--report-path", reportPath, "--no-banner", "--no-git"],
-      { cwd, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 },
+      ["detect", "--source", cwd, "--report-format", "json", "--report-path", reportPath, "--no-banner", "--no-git", ...(configPath ? ["--config", configPath] : [])],
+      { cwd, encoding: "utf8", maxBuffer: 64 * 1024 * 1024, timeout: 120_000 },
     );
     if (out.error) throw new Error(`gitleaks failed to run: ${out.error.message}`);
     // gitleaks exits 1 when it finds leaks; anything else non-zero is a real error.
     if (out.status !== 0 && out.status !== 1) {
-      throw new Error(`gitleaks exited ${out.status}: ${(out.stderr as string).slice(0, 500)}`);
+      throw new Error(`gitleaks exited ${out.status}`);
     }
-    if (!fs.existsSync(reportPath)) return [];
+    if (!fs.existsSync(reportPath)) throw new Error("gitleaks produced no report");
     const raw = JSON.parse(fs.readFileSync(reportPath, "utf8")) as GitleaksJson[];
-    return raw.map((f) => ({
+    if (!Array.isArray(raw) || !raw.every((f) => typeof f.File === "string" && Number.isInteger(f.StartLine) && typeof f.RuleID === "string")) throw new Error("gitleaks produced an invalid report");
+    if (out.status === 1 && raw.length === 0) throw new Error("gitleaks failed without findings");
+    const match = /scanned ~([\d.]+) bytes/u.exec(out.stderr ?? "");
+    const bytes = match ? Number(match[1]) : 0;
+    return { bytes, findings: raw.map((f) => ({
       // gitleaks reports absolute paths; relativize for a clean report
       file: path.relative(cwd, f.File),
       line: f.StartLine,
       rule: f.RuleID,
       description: f.Description ?? "",
-    }));
+    })) };
   } finally {
     fs.rmSync(path.dirname(reportPath), { recursive: true, force: true });
   }
+}
+
+export function scanSecrets(cwd = process.cwd()): SecretFinding[] {
+  return scanSecretReport(cwd).findings;
 }
 
 /** Human-readable report. Returns true when clean (no findings). */

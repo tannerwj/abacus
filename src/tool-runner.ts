@@ -2,6 +2,7 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { digest } from "./evidence.js";
 
 /** Find an installed package without depending on its exports map. */
 function packageManifest(packageName: string, start: string): string | undefined {
@@ -42,11 +43,30 @@ export function nodeToolBinPath(
 }
 
 /** Run a declared Node CLI directly, with arguments kept out of a shell. */
-export function runNodeTool(bin: string, args: string[], cwd: string) {
+export function runNodeTool(bin: string, args: string[], cwd: string, env?: Record<string, string>) {
   return spawnSync(process.execPath, [bin, ...args], {
     cwd,
     encoding: "utf8",
     maxBuffer: 64 * 1024 * 1024,
     shell: false,
+    timeout: 120_000,
+    env: env ? { ...process.env, ...env } : process.env,
   });
+}
+
+/** Metadata for the actual resolved installation, rather than a PATH guess. */
+export function toolMetadata(bin: string, name: string): { name: string; version: string; digest: string } {
+  let dir = path.dirname(fs.realpathSync(bin));
+  for (;;) {
+    const file = path.join(dir, "package.json");
+    if (fs.existsSync(file)) {
+      const pkg: unknown = JSON.parse(fs.readFileSync(file, "utf8"));
+      if (pkg && typeof pkg === "object" && "version" in pkg && typeof pkg.version === "string") {
+        return { name, version: pkg.version, digest: digest(fs.readFileSync(bin)) };
+      }
+    }
+    const parent = path.dirname(dir);
+    if (parent === dir) throw new Error(`Cannot determine ${name} version`);
+    dir = parent;
+  }
 }

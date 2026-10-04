@@ -4,12 +4,12 @@
  * metric grows past snapshot × (1 + slack) or a fixed `max`. Fixed per-function
  * budgets (oxlint, ABC) stop the worst offenders; the ratchet stops the slow creep.
  */
-import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import ts from "typescript";
 import { scoreProject } from "./abc.js";
 import type { AbacusConfig } from "./config.js";
+import { nodeToolBinPath, runNodeTool } from "./tool-runner.js";
 
 export type Snapshot = Record<string, number>;
 interface Metric { key: string; value: number; slack: number; max?: number }
@@ -50,10 +50,14 @@ function linesForRoot(cwd: string, root: string): { code: number; comment: numbe
 export function localBin(name: string, cwd = process.cwd()): string { const local = path.join(cwd, "node_modules/.bin", name); return fs.existsSync(local) ? local : name; }
 
 function oxlintCount(cwd: string): number {
-  const out = spawnSync(localBin("oxlint", cwd), ["--format", "json", "."], { cwd, encoding: "utf8" });
+  const out = runNodeTool(nodeToolBinPath("oxlint", "oxlint", cwd), ["--format", "json", "."], cwd);
   if (out.error) throw new Error(`oxlint not runnable: ${out.error.message}`);
   const json = out.stdout.slice(out.stdout.indexOf("{"));
-  return (JSON.parse(json) as { diagnostics: unknown[] }).diagnostics.length;
+  if (out.status !== 0 && out.status !== 1) throw new Error("oxlint failed to collect ratchet diagnostics");
+  const report = JSON.parse(json) as { diagnostics: unknown[]; number_of_files: number };
+  if (!Array.isArray(report.diagnostics) || !Number.isInteger(report.number_of_files) || report.number_of_files <= 0) throw new Error("oxlint ratchet scan is invalid or empty");
+  if (out.status === 1 && !report.diagnostics.length) throw new Error("oxlint failed without ratchet diagnostics");
+  return report.diagnostics.length;
 }
 
 export function measureRatchet(config: AbacusConfig, cwd = process.cwd()): Metric[] {

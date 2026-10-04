@@ -7,11 +7,9 @@
  * — reported as advisory, never failing: adopting a flag is the repo's
  * decision, recorded in its tsconfig.
  */
-import { spawnSync } from "node:child_process";
-import fs from "node:fs";
-import { createRequire } from "node:module";
 import path from "node:path";
 import ts from "typescript";
+import { nodeToolBinPath, runNodeTool } from "./tool-runner.js";
 
 export interface TscResult {
   /** true when tsc reported zero errors */
@@ -22,16 +20,12 @@ export interface TscResult {
   options: Record<string, unknown>;
   /** tsconfig path used, if any */
   configPath?: string;
+  files: number;
 }
 
 /** Project's tsc if installed, else the TypeScript bundled with abacus. */
 export function tscBinPath(cwd = process.cwd()): string {
-  const local = path.join(cwd, "node_modules", ".bin", process.platform === "win32" ? "tsc.cmd" : "tsc");
-  if (fs.existsSync(local)) return local;
-  const require = createRequire(import.meta.url);
-  const bundled = path.join(path.dirname(require.resolve("typescript")), "..", "bin", "tsc");
-  if (!fs.existsSync(bundled)) throw new Error(`no tsc found (checked ${local} and ${bundled})`);
-  return bundled;
+  return nodeToolBinPath("typescript", "tsc", cwd);
 }
 
 /** Resolve the effective tsconfig (following `extends`) via the TS API. Exported for tests. */
@@ -46,13 +40,13 @@ export function effectiveOptions(cwd = process.cwd()): { options: Record<string,
 
 export function runTsc(cwd = process.cwd()): TscResult {
   const { options, configPath } = effectiveOptions(cwd);
-  const out = spawnSync(tscBinPath(cwd), ["--noEmit", "--pretty", "false"], {
-    cwd, encoding: "utf8", maxBuffer: 64 * 1024 * 1024,
-  });
+  const out = runNodeTool(tscBinPath(cwd), ["--noEmit", "--pretty", "false", "--listFiles"], cwd);
   if (out.error) throw new Error(`tsc failed to run: ${out.error.message}`);
   const text = `${out.stdout ?? ""}\n${out.stderr ?? ""}`;
   const errors = text.split("\n").filter((l) => /error TS\d+/.test(l));
-  return { clean: out.status === 0 && errors.length === 0, errors, options, configPath };
+  if (out.status !== 0 && errors.length === 0) throw new Error("tsc failed without compiler diagnostics");
+  const files = text.split("\n").filter((line) => path.isAbsolute(line) && /\.[cm]?tsx?$/.test(line) && !line.includes(`${path.sep}node_modules${path.sep}`)).length;
+  return { clean: out.status === 0 && errors.length === 0, errors, options, configPath, files };
 }
 
 /** Beyond-`strict` flags worth adopting, with the one-line reason. */

@@ -4,3 +4,8 @@ export { loadConfig, defaults, CONFIG_FILE, CHECK_GATES, SOURCE_GATES } from "./
 export { reportCheck, runGates } from "./check.js";
 export { init } from "./init.js";
 export { measureRatchet, reportRatchet, countLines } from "./ratchet.js";
+export { evaluatePolicy, printEvidence } from "./policy-runner.js";
+export { resolvePolicyPack, computePolicyPackDigest, validatePolicyPack, validateExceptions, applyExceptions } from "./policy.js";
+export { comparePolicyRuns } from "./preview.js";
+export { runArchitecture } from "./architecture.js";
+export { runPackageValidation } from "./package-validation.js";

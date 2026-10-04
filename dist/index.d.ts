@@ -4,3 +4,9 @@ export { loadConfig, defaults, CONFIG_FILE, CHECK_GATES, SOURCE_GATES, type Chec
 export { reportCheck, runGates, type GateRunners } from "./check.js";
 export { init } from "./init.js";
 export { measureRatchet, reportRatchet, countLines, type Snapshot } from "./ratchet.js";
+export { evaluatePolicy, printEvidence, type EvaluateOptions } from "./policy-runner.js";
+export { resolvePolicyPack, computePolicyPackDigest, validatePolicyPack, validateExceptions, applyExceptions, type PolicyPack, type PolicyPackReference, type PolicyCheck, type RepositoryException } from "./policy.js";
+export { comparePolicyRuns, type PolicyPreview } from "./preview.js";
+export { runArchitecture, type ArchitectureOptions } from "./architecture.js";
+export { runPackageValidation, type PackageValidationOptions } from "./package-validation.js";
+export { type Outcome, type Enforcement, type Finding, type AdapterResult, type CheckEvidence, type RunEvidence } from "./evidence.js";

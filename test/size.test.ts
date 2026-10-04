@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { defaults, type AbacusConfig, type SizeBudget } from "../src/config.js";
+import { defaults, validateWranglerArgs, type AbacusConfig, type SizeBudget } from "../src/config.js";
 import { gzipSize, measureBudgets, reportSize } from "../src/size.js";
 
 describe("size budgets", () => {
@@ -37,7 +37,7 @@ describe("size budgets", () => {
   test.each(["sum", "largest"] as const)("permits an explicitly optional empty budget with mode %s", (mode) => {
     config.size.budgets[0].mode = mode;
     config.size.budgets[0].allowEmpty = true;
-    expect(measureBudgets(config, dir)).toEqual([{ label: "JavaScript", actual: 0, max: 1024, ok: true }]);
+    expect(measureBudgets(config, dir)).toEqual([{ label: "JavaScript", actual: 0, max: 1024, ok: true, files: 0 }]);
     expect(reportSize(config, dir)).toBe(true);
   });
 
@@ -55,10 +55,10 @@ describe("size budgets", () => {
     const actual = mode === "largest" ? Math.max(...sizes) : sizes.reduce((sum, size) => sum + size, 0);
     const budget: SizeBudget = { ...config.size.budgets[0], mode, allowEmpty: true, max: actual };
     config.size.budgets = [budget];
-    expect(measureBudgets(config, dir)).toEqual([{ label: "JavaScript", actual, max: actual, ok: true }]);
+    expect(measureBudgets(config, dir)).toEqual([{ label: "JavaScript", actual, max: actual, ok: true, files: 2 }]);
     expect(reportSize(config, dir)).toBe(true);
     budget.max = actual - 1;
-    expect(measureBudgets(config, dir)).toEqual([{ label: "JavaScript", actual, max: actual - 1, ok: false }]);
+    expect(measureBudgets(config, dir)).toEqual([{ label: "JavaScript", actual, max: actual - 1, ok: false, files: 2 }]);
     expect(reportSize(config, dir)).toBe(false);
   });
 
@@ -75,7 +75,7 @@ describe("size budgets", () => {
     const actual = gzipSize(target);
     for (const mode of ["sum", "largest"] as const) {
       config.size.budgets[0] = { ...config.size.budgets[0], mode, allowEmpty: true, max: 1 };
-      expect(measureBudgets(config, dir)).toEqual([{ label: "JavaScript", actual, max: 1, ok: false }]);
+      expect(measureBudgets(config, dir)).toEqual([{ label: "JavaScript", actual, max: 1, ok: false, files: 1 }]);
       expect(reportSize(config, dir)).toBe(false);
     }
   });
@@ -85,6 +85,16 @@ describe("size budgets", () => {
     fs.symlinkSync(path.join(dir, "target"), path.join(dir, "assets/directory.js"));
     expect(measureBudgets(config, dir)[0].ok).toBe(false);
     config.size.budgets[0].allowEmpty = true;
-    expect(measureBudgets(config, dir)[0]).toEqual({ label: "JavaScript", actual: 0, max: 1024, ok: true });
+    expect(measureBudgets(config, dir)[0]).toEqual({ label: "JavaScript", actual: 0, max: 1024, ok: true, files: 0 });
   });
+});
+
+
+test.each(["--dry-run=false", "--no-dry-run", "--outdir", "--", "--upload-source-maps"])("rejects mutable/protected Wrangler argument %s before running a tool", (argument) => {
+  expect(() => validateWranglerArgs([argument])).toThrow(/permits only/);
+});
+
+test("normalizes only explicit read-only Wrangler selectors", () => {
+  expect(validateWranglerArgs(["--env=preview", "--name", "sample-worker", "--config", "wrangler.toml"])).toEqual(["--env", "preview", "--name", "sample-worker", "--config", "wrangler.toml"]);
+  expect(() => validateWranglerArgs(["--env", "--dry-run=false"])).toThrow(/explicit value/);
 });

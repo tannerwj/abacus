@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "name": "@abacus/typescript-advisory",
+  "version": "1.1.0",
+  "compatibility": {
+    "adapterVersion": 1,
+    "evidenceSchemaVersion": 1,
+    "tools": {
+      "oxlint": ">=1.80.0 <2.0.0"
+    }
+  },
+  "nativeFiles": [
+    "native/base.json"
+  ],
+  "checks": [
+    {
+      "id": "source-lint",
+      "gate": "lint",
+      "required": true,
+      "enforcement": "warn",
+      "severity": "warning",
+      "rationale": "Review source correctness findings before promoting this check to blocking",
+      "nativeConfig": "native/oxlint.json"
+    },
+    {
+      "id": "function-complexity",
+      "gate": "abc",
+      "required": true,
+      "enforcement": "warn",
+      "severity": "warning",
+      "rationale": "Measure complexity first and choose a project-owned budget",
+      "parameters": {
+        "abc": {
+          "budget": 50
+        }
+      }
+    },
+    {
+      "id": "source-types",
+      "gate": "tsc",
+      "required": true,
+      "enforcement": "warn",
+      "severity": "error",
+      "rationale": "Make compiler coverage explicit without changing adoption defaults"
+    }
+  ]
+}
