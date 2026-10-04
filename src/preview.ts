@@ -65,9 +65,25 @@ function compilerInputs(run: RunEvidence): Map<string, string> {
   }
   return inputs;
 }
+function compilerProjectClosures(run: RunEvidence): Map<string, string> {
+  const closures = new Map<string, string>();
+  for (const check of run.checks) for (const project of check.projects ?? []) {
+    if (!["pass", "fail"].includes(project.outcome)) continue;
+    if (!project.project || (project.inputDigest !== undefined && !/^[a-f0-9]{64}$/u.test(project.inputDigest))) throw new Error("policy preview has invalid compiler project input evidence");
+    const inputs = new Map<string, string>();
+    for (const kind of ["configs", "sources", "dependencies"] as const) for (const entry of project[kind]) recordCompilerInput(inputs, kind, entry);
+    const closure = canonicalPolicyJson({ inputs: [...inputs].sort(([a], [b]) => a.localeCompare(b, "en")), inputDigest: project.inputDigest });
+    const previous = closures.get(project.project);
+    if (previous !== undefined && previous !== closure) throw new Error("policy preview has inconsistent complete compiler project inputs within a run");
+    closures.set(project.project, closure);
+  }
+  return closures;
+}
 function assertSameCompilerInputs(before: RunEvidence, after: RunEvidence): void {
   const old = compilerInputs(before), next = compilerInputs(after);
   for (const [inputKey, hash] of old) if (next.has(inputKey) && next.get(inputKey) !== hash) throw new Error("policy preview must use the same bytes for shared compiler inputs");
+  const oldProjects = compilerProjectClosures(before), nextProjects = compilerProjectClosures(after);
+  for (const [project, closure] of oldProjects) if (nextProjects.has(project) && nextProjects.get(project) !== closure) throw new Error("policy preview must use the same complete input closure for shared compiler projects");
 }
 function assertSameEnvironment(before: RunEvidence, after: RunEvidence): void {
   if (canonicalPolicyJson(before.runtime) !== canonicalPolicyJson(after.runtime)) throw new Error("policy preview must use the same runtime (Node, Abacus, platform and architecture)");

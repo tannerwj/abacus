@@ -33,6 +33,22 @@ function compilerRun(cwd, project, incremental) {
             fs.rmSync(directory, { recursive: true, force: true });
     }
 }
+/** Resolution manifests can change the meaning or selected entrypoint of unchanged declarations. */
+function installedManifests(files) {
+    const manifests = new Set();
+    for (const file of files) {
+        const parts = path.resolve(file).split(path.sep), boundary = parts.indexOf("node_modules");
+        if (boundary < 0)
+            continue;
+        const root = parts.slice(0, boundary + 1).join(path.sep);
+        for (let directory = path.dirname(file); directory !== root; directory = path.dirname(directory)) {
+            const manifest = path.join(directory, "package.json");
+            if (fs.existsSync(manifest))
+                manifests.add(manifest);
+        }
+    }
+    return [...manifests];
+}
 export function runTsc(cwd = process.cwd(), project = "tsconfig.json") {
     const inputs = inspectCompilerInputs(cwd, project);
     const { options, configPath } = inputs;
@@ -54,7 +70,8 @@ export function runTsc(cwd = process.cwd(), project = "tsconfig.json") {
     catch {
         return { ...inputs, clean: false, errors: [], files: 0, sources: [], dependencies: [], incompleteReason: "The compiler followed source inputs outside the evaluated project tree" };
     }
-    const entries = allSources.map((file) => ({ path: file, digest: digest(fs.readFileSync(file)) }));
+    const inputFiles = [...new Set([...allSources, ...installedManifests(allSources)])];
+    const entries = inputFiles.map((file) => ({ path: file, digest: digest(fs.readFileSync(file)) }));
     const sources = entries.filter((entry) => !entry.path.split(/[\\/]/u).includes("node_modules"));
     const dependencies = entries.filter((entry) => entry.path.split(/[\\/]/u).includes("node_modules"));
     return { ...inputs, sources, dependencies, clean: out.status === 0 && errors.length === 0, errors, options, configPath, files: projectSources.length };

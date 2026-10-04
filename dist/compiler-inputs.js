@@ -12,14 +12,17 @@ export function assertCompilerSource(cwd, file) {
     if (fs.existsSync(file) && !inside(fs.realpathSync(cwd), fs.realpathSync(file)))
         throw new Error("Compiler symlink input leaves the evaluated project tree");
 }
-/** Inspect actual extends reads without allowing an implicit parent project or external files. */
+/** Close config, extends, and reference reads without building unselected projects. */
 export function inspectCompilerInputs(cwd, project = "tsconfig.json") {
     cwd = path.resolve(cwd);
     const configPath = path.resolve(cwd, project);
     if (!fs.existsSync(configPath))
         return { options: {}, configs: [] };
     const configs = new Map();
+    const visiting = new Set();
+    const parsedConfigs = new Map();
     let configError = false;
+    let incompleteReason = "Compiler configuration could not establish complete project inputs";
     try {
         assertCompilerSource(cwd, configPath);
         const host = {
@@ -40,11 +43,35 @@ export function inspectCompilerInputs(cwd, project = "tsconfig.json") {
             },
             onUnRecoverableConfigFileDiagnostic() { configError = true; },
         };
-        const parsed = ts.getParsedCommandLineOfConfigFile(configPath, {}, host);
-        if (!parsed || configError || parsed.errors.length)
-            return { options: {}, configPath, configs: [...configs.values()], incompleteReason: "Compiler configuration could not establish complete project inputs" };
-        for (const file of parsed.fileNames)
+        function inspectConfig(file) {
             assertCompilerSource(cwd, file);
+            if (!fs.existsSync(file))
+                return undefined;
+            // Real paths also catch a cycle reached through an in-tree config symlink.
+            const key = fs.realpathSync(file);
+            if (visiting.has(key)) {
+                incompleteReason = "Compiler project reference cycle prevents complete project inputs";
+                return undefined;
+            }
+            if (parsedConfigs.has(file))
+                return parsedConfigs.get(file);
+            visiting.add(key);
+            const parsed = ts.getParsedCommandLineOfConfigFile(file, {}, host);
+            if (!parsed || configError || parsed.errors.length)
+                return undefined;
+            for (const source of parsed.fileNames)
+                assertCompilerSource(cwd, source);
+            for (const reference of parsed.projectReferences ?? []) {
+                if (!inspectConfig(ts.resolveProjectReferencePath(reference)))
+                    return undefined;
+            }
+            visiting.delete(key);
+            parsedConfigs.set(file, parsed);
+            return parsed;
+        }
+        const parsed = inspectConfig(configPath);
+        if (!parsed)
+            return { options: {}, configPath, configs: [...configs.values()], incompleteReason };
         return { options: parsed.options, configPath, configs: [...configs.values()] };
     }
     catch {

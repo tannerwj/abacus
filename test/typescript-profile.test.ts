@@ -7,6 +7,7 @@ import { finding, validateAdapterResult } from "../src/evidence.js";
 import { evaluatePolicy } from "../src/policy-runner.js";
 import { applyPolicyParameters, computePolicyPackDigest, validatePolicyParameters, type PolicyPack } from "../src/policy.js";
 import { typescriptEvidence } from "../src/typescript-profile.js";
+import { comparePolicyRuns } from "../src/preview.js";
 
 const at = "2026-10-04T08:00:00.000Z";
 const options = { strict: true, noEmit: true, skipLibCheck: true, target: "ES2022", types: [], lib: ["ES2022"] };
@@ -175,11 +176,37 @@ describe("bounded compiler project selection", () => {
     const first = typescriptEvidence(config(), cwd);
     expect(first).toMatchObject({ outcome: "pass", scope: { scanned: 1 } });
     expect(first.projects?.[0].dependencies.map((item) => item.path)).toContain("installed:node_modules/typed/index.d.ts");
+    expect(first.projects?.[0].dependencies.map((item) => item.path)).toContain("installed:node_modules/typed/package.json");
     expect(JSON.stringify(first)).not.toContain(cwd);
     fs.writeFileSync(path.join(dependency, "index.d.ts"), "export interface Thing { value: number; extra?: string }\n");
     const second = typescriptEvidence(config(), cwd);
     expect(second.outcome).toBe("pass");
     expect(second.projects?.[0].inputDigest).not.toBe(first.projects?.[0].inputDigest);
+  }, 60_000);
+
+  test("changed installed resolution entrypoints cannot masquerade as policy findings", () => {
+    const dependency = path.join(cwd, "node_modules/typed"); fs.mkdirSync(dependency, { recursive: true });
+    const manifest = { name: "typed", version: "1.0.0", types: "a.d.ts" };
+    writeJson(dependency, "package.json", manifest);
+    fs.writeFileSync(path.join(dependency, "a.d.ts"), "export interface Thing { value: number }\n");
+    fs.writeFileSync(path.join(dependency, "b.d.ts"), "export interface Thing { value: string }\n");
+    populated(cwd, "tsconfig.json", "index.ts", 'import type { Thing } from "typed"; export const value: Thing = { value: 1 };\n');
+    writeJson(cwd, "tsconfig.json", { compilerOptions: { ...options, module: "NodeNext", moduleResolution: "NodeNext" }, files: ["index.ts"] });
+    const first = evaluatePolicy(config(), cwd, { evaluatedAt: at });
+    expect(first.checks[0].outcome).toBe("pass");
+    writeJson(dependency, "package.json", { ...manifest, types: "./a.d.ts" });
+    const sameEntry = evaluatePolicy(config(), cwd, { evaluatedAt: at });
+    expect(sameEntry.checks[0].outcome).toBe("pass");
+    expect(sameEntry.checks[0].projects?.[0].sources).toEqual(first.checks[0].projects?.[0].sources);
+    expect(sameEntry.checks[0].projects?.[0].inputDigest).not.toBe(first.checks[0].projects?.[0].inputDigest);
+    expect(() => comparePolicyRuns(first, sameEntry)).toThrow(/same bytes for shared compiler inputs/);
+    writeJson(dependency, "package.json", { ...manifest, types: "b.d.ts" });
+    const second = evaluatePolicy(config(), cwd, { evaluatedAt: at });
+    expect(second.checks[0].outcome).toBe("fail");
+    expect(second.source.treeDigest).toBe(first.source.treeDigest);
+    expect(second.configDigest).toBe(first.configDigest);
+    expect(second.checks[0].projects?.[0].inputDigest).not.toBe(first.checks[0].projects?.[0].inputDigest);
+    expect(() => comparePolicyRuns(first, second)).toThrow(/same bytes for shared compiler inputs|same complete input closure/);
   }, 60_000);
 
   test("unverified diagnostic filenames never cross the evidence boundary", () => {

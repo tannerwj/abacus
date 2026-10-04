@@ -49,6 +49,21 @@ function compilerRun(cwd: string, project: string, incremental: boolean) {
   } finally { if (directory) fs.rmSync(directory, { recursive: true, force: true }); }
 }
 
+/** Resolution manifests can change the meaning or selected entrypoint of unchanged declarations. */
+function installedManifests(files: string[]): string[] {
+  const manifests = new Set<string>();
+  for (const file of files) {
+    const parts = path.resolve(file).split(path.sep), boundary = parts.indexOf("node_modules");
+    if (boundary < 0) continue;
+    const root = parts.slice(0, boundary + 1).join(path.sep);
+    for (let directory = path.dirname(file); directory !== root; directory = path.dirname(directory)) {
+      const manifest = path.join(directory, "package.json");
+      if (fs.existsSync(manifest)) manifests.add(manifest);
+    }
+  }
+  return [...manifests];
+}
+
 export function runTsc(cwd = process.cwd(), project = "tsconfig.json"): TscResult {
   const inputs = inspectCompilerInputs(cwd, project);
   const { options, configPath } = inputs;
@@ -62,7 +77,8 @@ export function runTsc(cwd = process.cwd(), project = "tsconfig.json"): TscResul
   const projectSources = allSources.filter((file) => !file.split(/[\\/]/u).includes("node_modules"));
   try { for (const file of projectSources) assertCompilerSource(cwd, file); }
   catch { return { ...inputs, clean: false, errors: [], files: 0, sources: [], dependencies: [], incompleteReason: "The compiler followed source inputs outside the evaluated project tree" }; }
-  const entries = allSources.map((file) => ({ path: file, digest: digest(fs.readFileSync(file)) }));
+  const inputFiles = [...new Set([...allSources, ...installedManifests(allSources)])];
+  const entries = inputFiles.map((file) => ({ path: file, digest: digest(fs.readFileSync(file)) }));
   const sources = entries.filter((entry) => !entry.path.split(/[\\/]/u).includes("node_modules"));
   const dependencies = entries.filter((entry) => entry.path.split(/[\\/]/u).includes("node_modules"));
   return { ...inputs, sources, dependencies, clean: out.status === 0 && errors.length === 0, errors, options, configPath, files: projectSources.length };
