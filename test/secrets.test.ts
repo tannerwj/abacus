@@ -53,6 +53,37 @@ describe("secrets gate", () => {
     }
   });
 
+  test("root-anchored allowlists use the target cwd and reject nested copies", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "abacus-secrets-exact-path-"));
+    try {
+      expect(dir).not.toBe(process.cwd());
+      fs.writeFileSync(path.join(dir, ".gitleaks.toml"), String.raw`[extend]
+useDefault = true
+
+[[allowlists]]
+condition = "AND"
+paths = ['''^test/secrets\.test\.ts$''']
+regexTarget = "secret"
+regexes = ['''^${FAKE_STRIPE_KEY}$''']
+`);
+      fs.mkdirSync(path.join(dir, "test"));
+      const fixture = `const fake = "${FAKE_STRIPE_KEY}";\n`;
+      fs.writeFileSync(path.join(dir, "test/secrets.test.ts"), fixture);
+      expect(scanSecrets(dir)).toEqual([]);
+
+      fs.mkdirSync(path.join(dir, "other/test"), { recursive: true });
+      fs.writeFileSync(path.join(dir, "other/test/secrets.test.ts"), fixture);
+      const findings = scanSecrets(dir);
+      expect(findings.map((finding) => finding.file)).toEqual([
+        "other/test/secrets.test.ts",
+      ]);
+      expect(findings[0]).toMatchObject({ line: 1, rule: "stripe-access-token" });
+      expect(JSON.stringify(findings)).not.toContain(FAKE_STRIPE_KEY);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   test("repository allowlist exempts only the fake key in its exact test file", () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "abacus-secrets-allowlist-"));
     try {
@@ -61,7 +92,14 @@ describe("secrets gate", () => {
       fs.writeFileSync(path.join(dir, "test/secrets.test.ts"), `const fake = "${FAKE_STRIPE_KEY}";\n`);
       expect(scanSecrets(dir)).toEqual([]);
       fs.writeFileSync(path.join(dir, "other.js"), `const unexpected = "${FAKE_STRIPE_KEY}";\n`);
-      expect(scanSecrets(dir).map((finding) => finding.file)).toContain("other.js");
+      fs.mkdirSync(path.join(dir, "other/test"), { recursive: true });
+      fs.writeFileSync(path.join(dir, "other/test/secrets.test.ts"), `const fake = "${FAKE_STRIPE_KEY}";\n`);
+      const findings = scanSecrets(dir);
+      expect(findings.map((finding) => finding.file).sort()).toEqual([
+        "other.js",
+        "other/test/secrets.test.ts",
+      ].sort());
+      expect(JSON.stringify(findings)).not.toContain(FAKE_STRIPE_KEY);
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
     }

@@ -45,6 +45,7 @@ interface GitleaksJson {
 
 /** Run gitleaks detect on the working tree. Secret values are dropped, never returned. */
 export function scanSecretReport(cwd = process.cwd(), configPath?: string): { findings: SecretFinding[]; bytes: number } {
+  cwd = path.resolve(cwd);
   const reportPath = path.join(
     fs.mkdtempSync(path.join(os.tmpdir(), "abacus-secrets-")),
     "report.json",
@@ -52,7 +53,7 @@ export function scanSecretReport(cwd = process.cwd(), configPath?: string): { fi
   try {
     const out = spawnSync(
       gitleaksBinPath(),
-      ["detect", "--source", cwd, "--report-format", "json", "--report-path", reportPath, "--no-banner", "--no-git", ...(configPath ? ["--config", configPath] : [])],
+      ["detect", "--source", ".", "--report-format", "json", "--report-path", reportPath, "--no-banner", "--no-git", ...(configPath ? ["--config", configPath] : [])],
       { cwd, encoding: "utf8", maxBuffer: 64 * 1024 * 1024, timeout: 120_000 },
     );
     if (out.error) throw new Error(`gitleaks failed to run: ${out.error.message}`);
@@ -67,8 +68,8 @@ export function scanSecretReport(cwd = process.cwd(), configPath?: string): { fi
     const match = /scanned ~([\d.]+) bytes/u.exec(out.stderr ?? "");
     const bytes = match ? Number(match[1]) : 0;
     return { bytes, findings: raw.map((f) => ({
-      // gitleaks reports absolute paths; relativize for a clean report
-      file: path.relative(cwd, f.File),
+      // Resolve relative native paths against the scanned tree, never the caller's cwd.
+      file: path.relative(cwd, path.resolve(cwd, f.File)).split(path.sep).join("/"),
       line: f.StartLine,
       rule: f.RuleID,
       description: f.Description ?? "",

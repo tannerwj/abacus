@@ -4,6 +4,6 @@ useDefault = true
 [[allowlists]]
 description = "Documented fake Stripe key used only by secret-detection regression tests"
 condition = "AND"
-paths = ['''(^|/)test/secrets\.test\.ts$''']
+paths = ['''^test/secrets\.test\.ts$''']
 regexTarget = "secret"
 regexes = ['''^sk_live_4eC39HqLyjWDarjtT1zdp7dc$''']
