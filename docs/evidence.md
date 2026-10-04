@@ -6,6 +6,10 @@ for a new file (existing files are never overwritten). Keep output outside the
 input tree when comparing reproducible digests. `--at 2026-10-04T07:00:00Z`
 fixes the evaluation instant for dated debt and exceptions.
 
+The CLI drains stdout and stderr before exiting, including large JSON reports
+captured through pipes. Finding failures retain exit status 1; execution/configuration
+errors retain status 2.
+
 The version-1 contract records:
 
 - `pass`, `fail`, `waived`, `not-applicable`, `incomplete`, or `error`

@@ -102,10 +102,11 @@ const COMMANDS = {
     help: () => { console.log(HELP); return 0; }
 };
 const run = COMMANDS[command] ?? (() => { console.log(HELP); return 2; });
+// Let Node drain stdout/stderr, including large JSON written to pipes, before exiting.
 try {
-    process.exit(run());
+    process.exitCode = run();
 }
 catch (error) {
     console.error(`Abacus configuration or execution error: ${error instanceof Error ? error.message : "unknown error"}`);
-    process.exit(2);
+    process.exitCode = 2;
 }

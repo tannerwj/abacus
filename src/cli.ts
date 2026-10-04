@@ -95,5 +95,6 @@ const COMMANDS: Record<string, () => number> = {
 };
 
 const run = COMMANDS[command] ?? (() => { console.log(HELP); return 2; });
-try { process.exit(run()); }
-catch (error) { console.error(`Abacus configuration or execution error: ${error instanceof Error ? error.message : "unknown error"}`); process.exit(2); }
+// Let Node drain stdout/stderr, including large JSON written to pipes, before exiting.
+try { process.exitCode = run(); }
+catch (error) { console.error(`Abacus configuration or execution error: ${error instanceof Error ? error.message : "unknown error"}`); process.exitCode = 2; }
