@@ -21,6 +21,24 @@
       },
       "description": "Source roots scanned for ABC scores"
     },
+    "tsc": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "projects": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "default": ["tsconfig.json"],
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^(?!/)(?![A-Za-z]+:)(?!.*\\\\)(?!.*(?:^|/)\\.\\.(?:/|$)).+\\.json$"
+          },
+          "description": "Required local JSON compiler projects, each checked separately with --noEmit; no implicit reference builds"
+        }
+      }
+    },
     "exclude": {
       "type": "array",
       "items": {

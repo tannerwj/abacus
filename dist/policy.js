@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { bundledFile, relativeFile, validateNativeClosure } from "./policy-native.js";
-import { CHECK_GATES } from "./config.js";
+import { CHECK_GATES, validateTscProjects } from "./config.js";
 import { digest, finding } from "./evidence.js";
 export const POLICY_GATES = [...CHECK_GATES, "architecture", "package"];
 const SEMVER = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*))*))?(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/u;
@@ -115,6 +115,7 @@ export function validatePolicyParameters(value) {
             }
         } },
         abc: abcParameters, size: sizeParameters, ratchet: ratchetParameters,
+        tsc: (input, name) => settings(input, { projects: (val, key) => { validateTscProjects(val, key); } }, name),
         architecture: (input, name) => settings(input, { targets: list }, name), package: packageParameters,
     }, "parameters");
     return structuredClone(value);

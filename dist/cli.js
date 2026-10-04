@@ -6,7 +6,7 @@ import { loadConfig, SOURCE_GATES } from "./config.js";
 import { reportCheck } from "./check.js";
 import { reportDeadcode } from "./deadcode.js";
 import { reportSecrets } from "./secrets.js";
-import { reportTsc } from "./tsc.js";
+import { reportTypeScriptProfile } from "./typescript-profile.js";
 import { reportCycles } from "./cycles.js";
 import { reportDupes } from "./dupes.js";
 import { reportTodos } from "./todos.js";
@@ -49,7 +49,7 @@ const COMMANDS = {
     fmt: () => sh("oxfmt", rest.length ? rest : ["."]),
     deadcode: () => (reportDeadcode(process.cwd()) ? 0 : 1),
     secrets: () => (reportSecrets(process.cwd()) ? 0 : 1),
-    tsc: () => (reportTsc(process.cwd()) ? 0 : 1),
+    tsc: () => (reportTypeScriptProfile(loadConfig(), process.cwd()) ? 0 : 1),
     cycles: () => (reportCycles(process.cwd()) ? 0 : 1),
     dupes: () => (reportDupes(process.cwd()) ? 0 : 1),
     todos: () => (reportTodos(process.cwd()) ? 0 : 1),

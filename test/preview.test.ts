@@ -119,4 +119,17 @@ describe("pure policy upgrade preview", () => {
     const incompletePack = pack(); incompletePack.checks.pop(); expect(() => comparePolicyRuns(before, after, { beforePack: incompletePack })).toThrow("checks do not match");
     after.checks.push(after.checks[0]); expect(() => comparePolicyRuns(before, after)).toThrow("duplicate");
   });
+  test("compiler preview refuses changed shared declaration bytes but allows project selection changes", () => {
+    const policy = pack(), before = run(policy), after = run(policy);
+    const project = { project: "tsconfig.json", outcome: "pass" as const, scope: { kind: "repository" as const, targets: ["tsconfig.json"], scanned: 1, unit: "files" }, diagnostics: [], configs: [{ path: "tsconfig.json", digest: digest("config bytes") }], sources: [{ path: "src/index.ts", digest: digest("source bytes") }], dependencies: [{ path: "installed:node_modules/dependency/index.d.ts", digest: digest("declarations v1") }] };
+    findCheck(before, "source-types").projects = [structuredClone(project)];
+    findCheck(after, "source-types").projects = [structuredClone(project)];
+    const changed = findCheck(after, "source-types").projects?.[0];
+    if (!changed) throw new Error("Missing compiler fixture");
+    changed.dependencies[0].digest = digest("declarations v2");
+    expect(() => comparePolicyRuns(before, after)).toThrow(/same bytes for shared compiler inputs/);
+    changed.dependencies[0].digest = digest("declarations v1"); changed.project = "tsconfig.app.json";
+    expect(comparePolicyRuns(before, after).cleanAfter).toBe(true);
+  });
+
 });

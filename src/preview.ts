@@ -51,6 +51,24 @@ function toolInputs(run: RunEvidence): Map<string, { name: string; version: stri
   }
   return tools;
 }
+function recordCompilerInput(inputs: Map<string, string>, kind: string, entry: { path: string; digest: string }): void {
+  const inputKey = JSON.stringify([kind, entry.path]);
+  if (!entry.path || !/^[a-f0-9]{64}$/u.test(entry.digest)) throw new Error("policy preview has invalid compiler input evidence");
+  const previous = inputs.get(inputKey);
+  if (previous && previous !== entry.digest) throw new Error("policy preview has inconsistent compiler input bytes within a run");
+  inputs.set(inputKey, entry.digest);
+}
+function compilerInputs(run: RunEvidence): Map<string, string> {
+  const inputs = new Map<string, string>();
+  for (const check of run.checks) for (const project of check.projects ?? []) for (const kind of ["configs", "sources", "dependencies"] as const) {
+    for (const entry of project[kind]) recordCompilerInput(inputs, kind, entry);
+  }
+  return inputs;
+}
+function assertSameCompilerInputs(before: RunEvidence, after: RunEvidence): void {
+  const old = compilerInputs(before), next = compilerInputs(after);
+  for (const [inputKey, hash] of old) if (next.has(inputKey) && next.get(inputKey) !== hash) throw new Error("policy preview must use the same bytes for shared compiler inputs");
+}
 function assertSameEnvironment(before: RunEvidence, after: RunEvidence): void {
   if (canonicalPolicyJson(before.runtime) !== canonicalPolicyJson(after.runtime)) throw new Error("policy preview must use the same runtime (Node, Abacus, platform and architecture)");
   if (before.configDigest !== after.configDigest || !/^[a-f0-9]{64}$/u.test(before.configDigest)) throw new Error("policy preview must use the same repository configuration digest");
@@ -68,6 +86,7 @@ function validateRunPair(before: RunEvidence, after: RunEvidence): void {
   if (before.source.commit !== after.source.commit || before.source.treeDigest !== after.source.treeDigest || !/^[a-f0-9]{64}$/u.test(before.source.treeDigest)) throw new Error("policy preview must evaluate the same source commit and treeDigest");
   indexed(before.checks, "check"); indexed(after.checks, "check");
   assertSameEnvironment(before, after);
+  assertSameCompilerInputs(before, after);
 }
 function assertPackMetadata(run: RunEvidence, pack?: PolicyPack): void {
   if (!pack) return;

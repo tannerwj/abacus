@@ -12,6 +12,7 @@ import { fileURLToPath } from "node:url";
 import { nodeToolBinPath, runNodeTool } from "./tool-runner.js";
 import { parseGraphReport, type GraphReport } from "./dependency-graph.js";
 import { assertProjectPath } from "./config.js";
+import { AdapterFailure } from "./evidence.js";
 
 export interface CycleViolation {
   from: string;
@@ -55,7 +56,7 @@ function validateGraphInputs(report: GraphReport, cwd: string): void {
   }
   for (const module of report.modules) if (!module.source.split(/[\\/]/u).includes("node_modules")) assertProjectPath(cwd, module.source, "Cycle graph source");
   if (!report.summary.ruleSetUsed.forbidden.length) throw new Error("Cycle graph has no forbidden native rules");
-  if (report.modules.some((item) => item.dependencies.some((dependency) => dependency.couldNotResolve))) throw new Error("Cycle graph contains unresolved imports");
+  if (report.modules.some((item) => item.dependencies.some((dependency) => dependency.couldNotResolve))) throw new AdapterFailure("unresolved-imports");
 }
 
 export function runCycles(cwd = process.cwd(), configPath?: string): CyclesResult {

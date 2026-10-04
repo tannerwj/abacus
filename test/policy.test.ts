@@ -118,8 +118,7 @@ describe("versioned policy packs", () => {
     fs.writeFileSync(file, 'module.exports = { options: { tsConfig: { fileName: "./tsconfig.json" }, webpackConfig: { fileName: "./webpack.cjs" } } };');
     expect(() => computePolicyPackDigest(candidate, cwd)).toThrow("declared digest closure");
     candidate.nativeFiles = ["tsconfig.json", "webpack.cjs"];
-    const before = computePolicyPackDigest(candidate, cwd); expect(before).toMatch(/^[a-f0-9]{64}$/u);
-    fs.appendFileSync(path.join(cwd, "tsconfig.json"), "\n"); expect(computePolicyPackDigest(candidate, cwd)).not.toBe(before);
+    expect(() => computePolicyPackDigest(candidate, cwd)).toThrow("shared native resolution-file inputs are unsupported");
     fs.writeFileSync(file, 'module.exports = { extends: ["./tsconfig.json"], nested: { "$ref": "./tsconfig.json#/compilerOptions" } };');
     expect(computePolicyPackDigest(candidate, cwd)).toMatch(/^[a-f0-9]{64}$/u);
   });

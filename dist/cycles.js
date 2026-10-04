@@ -12,6 +12,7 @@ import { fileURLToPath } from "node:url";
 import { nodeToolBinPath, runNodeTool } from "./tool-runner.js";
 import { parseGraphReport } from "./dependency-graph.js";
 import { assertProjectPath } from "./config.js";
+import { AdapterFailure } from "./evidence.js";
 /** Project's depcruise if installed, else the one bundled with abacus. */
 export function depcruiseBinPath(cwd = process.cwd()) {
     return nodeToolBinPath("dependency-cruiser", "depcruise", cwd);
@@ -44,7 +45,7 @@ function validateGraphInputs(report, cwd) {
     if (!report.summary.ruleSetUsed.forbidden.length)
         throw new Error("Cycle graph has no forbidden native rules");
     if (report.modules.some((item) => item.dependencies.some((dependency) => dependency.couldNotResolve)))
-        throw new Error("Cycle graph contains unresolved imports");
+        throw new AdapterFailure("unresolved-imports");
 }
 export function runCycles(cwd = process.cwd(), configPath) {
     const bin = depcruiseBinPath(cwd);

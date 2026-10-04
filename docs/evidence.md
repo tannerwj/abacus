@@ -60,3 +60,5 @@ version/digest. Extra arguments are limited to explicit --env, --name and
 --config selectors, with config paths inside the project. Dry-run and temporary
 output flags are immutable; flags capable of turning a measurement into a
 publication are rejected before invoking Wrangler.
+
+Compiler checks retain separate selected-project coverage, safe TS code/location diagnostics, and source/config/installed-declaration byte closures. Out-of-tree non-installed sources or extends inputs are incomplete. Incremental build info is directed to an isolated temporary location. A required zero-target result stays incomplete even when native diagnostics exist or an exact waiver matches. Missing/invalid ratchet baselines and unresolved dependency imports use fixed safe cause codes; arbitrary tool output is never echoed.

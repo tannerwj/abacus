@@ -10,3 +10,4 @@ export { comparePolicyRuns, type PolicyPreview } from "./preview.js";
 export { runArchitecture, type ArchitectureOptions } from "./architecture.js";
 export { runPackageValidation, type PackageValidationOptions } from "./package-validation.js";
 export { type Outcome, type Enforcement, type Finding, type AdapterResult, type CheckEvidence, type RunEvidence } from "./evidence.js";
+export { typescriptEvidence, reportTypeScriptProfile } from "./typescript-profile.js";

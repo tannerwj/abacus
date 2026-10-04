@@ -9,3 +9,4 @@ export { resolvePolicyPack, computePolicyPackDigest, validatePolicyPack, validat
 export { comparePolicyRuns } from "./preview.js";
 export { runArchitecture } from "./architecture.js";
 export { runPackageValidation } from "./package-validation.js";
+export { typescriptEvidence, reportTypeScriptProfile } from "./typescript-profile.js";

@@ -36,6 +36,31 @@ function toolInputs(run) {
         }
     return tools;
 }
+function recordCompilerInput(inputs, kind, entry) {
+    const inputKey = JSON.stringify([kind, entry.path]);
+    if (!entry.path || !/^[a-f0-9]{64}$/u.test(entry.digest))
+        throw new Error("policy preview has invalid compiler input evidence");
+    const previous = inputs.get(inputKey);
+    if (previous && previous !== entry.digest)
+        throw new Error("policy preview has inconsistent compiler input bytes within a run");
+    inputs.set(inputKey, entry.digest);
+}
+function compilerInputs(run) {
+    const inputs = new Map();
+    for (const check of run.checks)
+        for (const project of check.projects ?? [])
+            for (const kind of ["configs", "sources", "dependencies"]) {
+                for (const entry of project[kind])
+                    recordCompilerInput(inputs, kind, entry);
+            }
+    return inputs;
+}
+function assertSameCompilerInputs(before, after) {
+    const old = compilerInputs(before), next = compilerInputs(after);
+    for (const [inputKey, hash] of old)
+        if (next.has(inputKey) && next.get(inputKey) !== hash)
+            throw new Error("policy preview must use the same bytes for shared compiler inputs");
+}
 function assertSameEnvironment(before, after) {
     if (canonicalPolicyJson(before.runtime) !== canonicalPolicyJson(after.runtime))
         throw new Error("policy preview must use the same runtime (Node, Abacus, platform and architecture)");
@@ -60,6 +85,7 @@ function validateRunPair(before, after) {
     indexed(before.checks, "check");
     indexed(after.checks, "check");
     assertSameEnvironment(before, after);
+    assertSameCompilerInputs(before, after);
 }
 function assertPackMetadata(run, pack) {
     if (!pack)
