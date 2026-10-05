@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Documentation and setup help
+    url: https://github.com/tannerwj/abacus/blob/master/docs/README.md
+    about: Start with the installation guide, gate configuration, and troubleshooting
+  - name: Report a security vulnerability privately
+    url: https://github.com/tannerwj/abacus/security/advisories/new
+    about: Keep exploit details and sensitive data out of public issues

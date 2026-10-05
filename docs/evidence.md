@@ -7,8 +7,8 @@ input tree when comparing reproducible digests. `--at 2026-10-04T07:00:00Z`
 fixes the evaluation instant for dated debt and exceptions.
 
 The CLI drains stdout and stderr before exiting, including large JSON reports
-captured through pipes. Finding failures retain exit status 1; execution/configuration
-errors retain status 2.
+captured through pipes. Checks exit 0 with no blockers, 1 when normalized evidence contains blockers
+(including adapter errors), and 2 for top-level configuration or execution errors.
 
 The version-1 contract records:
 
@@ -31,7 +31,8 @@ dependency-cruiser modules, jscpd source files, TypeScript project files,
 gitleaks bytes, and built assets. Units differ deliberately; do not sum them.
 Gitleaks measurements come from its pinned version's scan log; a missing count
 is incomplete. ABC includes files with no functions as legitimate scanned files.
-TypeScript strictness flags and undated TODOs remain advisory.
+TypeScript checks report safe diagnostics and selected-project coverage; stricter
+compiler flags remain repository-owned configuration. Undated TODOs are advisory.
 
 Secret scans use the selected repository as their working directory and native
 source `.`. Finding paths are repository-relative, so exact root-anchored path
@@ -70,4 +71,13 @@ version/digest. Extra arguments are limited to explicit --env, --name and
 output flags are immutable; flags capable of turning a measurement into a
 publication are rejected before invoking Wrangler.
 
-Compiler checks retain separate selected-project coverage, safe TS code/location diagnostics, and source/config/installed-declaration byte closures. Out-of-tree non-installed sources or extends inputs are incomplete. Incremental build info is directed to an isolated temporary location. A required zero-target result stays incomplete even when native diagnostics exist or an exact waiver matches. Missing/invalid ratchet baselines and unresolved dependency imports use fixed safe cause codes; arbitrary tool output is never echoed.
+Compiler checks retain separate selected-project coverage, safe TS code/location diagnostics, and source/config/installed-declaration byte closures. Out-of-tree non-installed sources or extends inputs are incomplete. Incremental build info is directed to an isolated temporary location. A required zero-target result stays incomplete even when native diagnostics exist or an exact waiver matches. Missing/invalid ratchet baselines use fixed safe cause codes; arbitrary tool output is never echoed.
+
+## Cycle coverage boundary
+
+Current cycle checks warn when imports cannot be resolved and still report
+detected cycles. Standalone, aggregate, and JSON checks can pass with that
+warning, so a pass does not prove complete cycle coverage. Review the notes and
+fix module resolution before relying on the graph result. The opt-in architecture
+profile treats unresolved imports as incomplete. This distinction is important
+when interpreting a green report.
