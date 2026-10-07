@@ -21,7 +21,20 @@ const cwd = ${JSON.stringify(cwd)};
 const temporary = ${JSON.stringify(temporary)};
 process.env.npm_config_cache = path.join(temporary, "npm-cache");
 process.env.npm_config_offline = "true";
-const tarball = await pack(cwd, { packageManager: "npm", ignoreScripts: true, destination: temporary });
+const stage = path.join(temporary, "pack-stage");
+// npm runs prepack/prepare/postpack during npm pack even with --ignore-scripts
+// (verified on npm 10), so pack a staged copy with pack-time lifecycle scripts
+// removed instead of trusting the flag. The documented contract is "build before
+// validation": the tarball under test must never execute the package's own scripts.
+fs.cpSync(cwd, stage, { recursive: true, filter: (src) => !path.relative(cwd, src).split(path.sep).includes("node_modules") });
+const stagedManifest = path.join(stage, "package.json");
+const stagedPkg = JSON.parse(fs.readFileSync(stagedManifest, "utf8"));
+if (stagedPkg && typeof stagedPkg === "object" && stagedPkg.scripts && typeof stagedPkg.scripts === "object") {
+  for (const name of ["prepack", "prepare", "postpack"]) delete stagedPkg.scripts[name];
+  if (Object.keys(stagedPkg.scripts).length === 0) delete stagedPkg.scripts;
+  fs.writeFileSync(stagedManifest, JSON.stringify(stagedPkg));
+}
+const tarball = await pack(stage, { packageManager: "npm", ignoreScripts: true, destination: temporary });
 if (!path.resolve(tarball).startsWith(temporary + path.sep)) throw new Error("unexpected packed destination");
 const bytes = fs.readFileSync(tarball);
 const unpacked = await unpack(bytes);
