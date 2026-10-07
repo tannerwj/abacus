@@ -214,6 +214,53 @@
         }
       }
     },
+    "verification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reports"],
+      "properties": {
+        "reports": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "path", "format", "profile", "required", "enforcement"],
+            "properties": {
+              "id": { "type": "string", "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._/-]{0,159}$" },
+              "path": { "type": "string", "minLength": 1 },
+              "format": { "enum": ["vitest", "playwright", "contract", "pnpm-audit"] },
+              "profile": { "enum": ["behavior", "authorization", "resilience", "performance", "dependencies"] },
+              "required": { "type": "boolean" },
+              "enforcement": { "enum": ["block", "warn", "observe"] },
+              "environment": { "enum": ["isolated", "staging"] },
+              "maxAgeHours": { "type": "number", "exclusiveMinimum": 0, "default": 24 },
+              "maxSkipped": { "type": "integer", "minimum": 0, "default": 0 },
+              "maxFlaky": { "type": "integer", "minimum": 0, "default": 0 },
+              "assertions": { "type": "array", "uniqueItems": true, "items": { "type": "string", "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._/-]{0,159}$" } },
+              "budgets": {
+                "type": "array",
+                "items": {
+                  "type": "object", "additionalProperties": false,
+                  "required": ["id", "unit", "max", "minSamples"],
+                  "properties": {
+                    "id": { "type": "string", "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._/-]{0,159}$" },
+                    "unit": { "enum": ["ms", "bytes", "count"] },
+                    "max": { "type": "number", "minimum": 0 },
+                    "minSamples": { "type": "integer", "minimum": 1 }
+                  }
+                }
+              }
+            },
+            "allOf": [
+              { "if": { "properties": { "profile": { "enum": ["authorization", "resilience"] } } }, "then": { "required": ["assertions", "environment"], "properties": { "format": { "const": "contract" }, "assertions": { "minItems": 1 } } } },
+              { "if": { "properties": { "profile": { "const": "performance" } } }, "then": { "required": ["budgets", "environment"], "properties": { "format": { "const": "contract" }, "budgets": { "minItems": 1 } } } },
+              { "if": { "properties": { "profile": { "const": "dependencies" } } }, "then": { "properties": { "format": { "const": "pnpm-audit" } } } },
+              { "if": { "properties": { "format": { "const": "pnpm-audit" } } }, "then": { "properties": { "profile": { "const": "dependencies" } } } }
+            ]
+          }
+        }
+      }
+    },
     "policy": {
       "type": "object",
       "required": [

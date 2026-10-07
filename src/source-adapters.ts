@@ -1,3 +1,4 @@
+import { lintReport, deadcodeReport } from "./native-reports.js";
 import fs from "node:fs";
 import path from "node:path";
 import { createRequire } from "node:module";
@@ -31,7 +32,7 @@ export function lintEvidence(cwd: string, configPath?: string): AdapterResult {
   const args = ["--type-aware", "--format", "json", ...ignored.flatMap((pattern) => ["--ignore-pattern", pattern]), ...(configPath ? ["--config", configPath] : []), "."];
   const out = runNodeTool(bin, args, cwd, { OXLINT_TSGOLINT_PATH: native });
   if (out.error || ![0, 1].includes(out.status ?? -1)) throw new Error("oxlint failed to execute");
-  const raw = JSON.parse(out.stdout) as { diagnostics: Array<{ code: string; filename: string; severity: string; labels?: Array<{ span?: { line?: number } }> }>; number_of_files: number };
+  const raw = lintReport(out.stdout);
   if (!Array.isArray(raw.diagnostics) || !Number.isInteger(raw.number_of_files) || raw.number_of_files < 0) throw new Error("Invalid oxlint report");
   const occurrences = new Map<string, number>();
   const findings = raw.diagnostics.map((item) => {
@@ -53,7 +54,7 @@ function abcEvidence(config: AbacusConfig, cwd: string): AdapterResult {
     if (item.score <= item.budget) return [];
     return [finding("abc/budget", `${key} #${ordinal}`, `ABC ${item.score} exceeds budget ${item.budget}`)];
   });
-  return checked({ outcome: resultFor(findings), scope: { ...scope("repository", config.roots, measured.files), excluded: config.exclude }, findings, metrics: { functions: measured.scores.length, maximum: measured.scores[0]?.score ?? 0 }, tool: astTool("typescript/abc-ast-v1") });
+  return checked({ outcome: resultFor(findings), scope: { ...scope("repository", config.roots, measured.files), excluded: config.exclude }, findings, metrics: { functions: measured.scores.length, maximum: measured.scores[0]?.score ?? 0, total: measured.scores.reduce((sum, item) => sum + item.score, 0), overBudget: findings.length }, tool: astTool("typescript/abc-ast-v1") });
 }
 
 function ratchetEvidence(config: AbacusConfig, cwd: string): AdapterResult {
@@ -80,7 +81,7 @@ function deadcodeEvidence(cwd: string, configPath?: string): AdapterResult {
   const bin = knipBinPath();
   const out = runNodeTool(bin, ["--reporter", reporter, ...(configPath ? ["--config", configPath] : [])], cwd);
   if (out.error || ![0, 1].includes(out.status ?? -1)) throw new Error("knip failed to execute");
-  const raw = JSON.parse(out.stdout) as { processed: number; hasConfigLoadErrors: boolean; findings: Array<{ type: string; file: string; name: string; severity?: string }> };
+  const raw = deadcodeReport(out.stdout);
   if (!Array.isArray(raw.findings) || !Number.isInteger(raw.processed) || raw.processed < 0 || typeof raw.hasConfigLoadErrors !== "boolean") throw new Error("Invalid knip report");
   if (raw.hasConfigLoadErrors) throw new Error("knip configuration load failed");
   const findings = raw.findings.map((item) => finding(`deadcode/${item.type}`, `${item.file} ${item.name}`, `Unused or unresolved ${item.type}`, item.severity === "warn" ? "warning" : "error"));
@@ -97,7 +98,7 @@ function secretEvidence(cwd: string, configPath?: string): AdapterResult {
 function cycleEvidence(cwd: string, configPath?: string): AdapterResult {
   const measured = runCycles(cwd, configPath);
   const notes = measured.unresolved > 0 ? [`${measured.unresolved} import${measured.unresolved === 1 ? "" : "s"} could not be resolved; cycle coverage may be incomplete`] : [];
-  return checked({ outcome: measured.clean ? "pass" : "fail", scope: scope("graph", [path.relative(cwd, sourceDir(cwd)) || "."], measured.files, "modules"), findings: measured.violations.map((item) => finding(`cycles/${item.rule}`, `${item.from} -> ${item.to}`, "Circular or forbidden dependency", item.severity === "error" ? "error" : item.severity === "warn" ? "warning" : "info")), notes, tool: toolMetadata(depcruiseBinPath(cwd), "dependency-cruiser"), configs: configs(cwd, [configPath ?? cruiseConfigPath(cwd)]) });
+  return checked({ outcome: measured.clean ? "pass" : "fail", coverage: { status: measured.unresolved ? "incomplete" : "complete", reasons: notes }, scope: scope("graph", [path.relative(cwd, sourceDir(cwd)) || "."], measured.files, "modules"), findings: measured.violations.map((item) => finding(`cycles/${item.rule}`, `${item.from} -> ${item.to}`, "Circular or forbidden dependency", item.severity === "error" ? "error" : item.severity === "warn" ? "warning" : "info")), notes: [], tool: toolMetadata(depcruiseBinPath(cwd), "dependency-cruiser"), configs: configs(cwd, [configPath ?? cruiseConfigPath(cwd)]) });
 }
 
 function dupeEvidence(cwd: string, configPath?: string): AdapterResult {

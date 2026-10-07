@@ -64,8 +64,10 @@ might be:
 
 Adapt these steps to actual scripts and tool scope. The `typescript` preset has
 no size budgets; `--all` does not configure architecture or package-validation
-profiles. Unresolved cycle imports remain a coverage warning in the current
-implementation, even when aggregate evidence reports a pass.
+profiles. Required graph coverage blocks when cycle imports remain unresolved.
+Configured verification reports run alongside source checks; record them first
+with [abacus verify](verification.md). Retain a [standards-change report](standards-changes.md)
+against the actual pull request base when budgets or configuration change.
 
 ## Evidence
 
@@ -77,3 +79,23 @@ Inspect the [evidence contract](evidence.md) before deciding what to retain or
 share. Reports omit secret values, but contain repository paths, findings, scope,
 and provenance. Use your repository's appropriate artifact visibility and
 retention policy.
+
+## This repository's workflow
+
+The committed [quality workflow](../.github/workflows/quality.yml) runs all source
+gates, behavior/report integration checks, seeded properties with regression
+proof, and a cold install plus packed consumers. It checks that `dist/` was
+rebuilt and uploads a standards report against the pull request's base commit.
+The workflow uses read-only permissions, a 20-minute limit and seven-day report
+retention. Each integration run cleans up its disposable state. The verification
+suite queries the dependency advisory service; an unavailable service fails.
+
+Standards reports support review; the default report does not approve or block
+intentional weakening automatically. A protected-branch review requirement must
+be configured in GitHub if the repository wants enforcement of human approval.
+This change does not alter repository settings.
+
+Actions are pinned to verified upstream commits: checkout 7.0.1, pnpm setup 6.1.0,
+Node setup 7.0.0 and artifact upload 7.0.2. Review those pins with dependency
+updates. CI has one runner per active ref and cancels superseded runs; cold
+installs and registry checks consume CI minutes and network requests.

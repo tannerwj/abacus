@@ -1,12 +1,14 @@
+import { jsonObject } from "./json-values.js";
 import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 import { runArchitecture } from "./architecture.js";
 import { CHECK_GATES, validateAbacusConfig, validateCheckGates, validateProjectInputs, type AbacusConfig, type CheckGate } from "./config.js";
 import { AdapterFailure, digest, finding, validateAdapterResult, type AdapterResult, type CheckEvidence, type RunEvidence } from "./evidence.js";
 import { runPackageValidation } from "./package-validation.js";
-import { applyExceptions, applyPolicyParameters, assertPolicyCompatibility, expiredExceptions, resolvePolicyPack, validateExceptions, type PolicyCheck, type ResolvedPolicyPack } from "./policy.js";
+import { applyExceptions, applyPolicyParameters, assertPolicyCompatibility, expiredExceptions, resolvePolicyPack, validateExceptions, type PolicyCheck, type ResolvedPolicyPack, type RepositoryException } from "./policy.js";
 import { sourceProvenance } from "./provenance.js";
 import { runSourceAdapter } from "./source-adapters.js";
+import { verificationEvidence } from "./verification.js";
 
 export interface EvaluateOptions {
   gates?: CheckGate[];
@@ -16,15 +18,16 @@ export interface EvaluateOptions {
   /** Used for deterministic fixture testing; ordinary CLI always uses the real adapters. */
   adapter?: (check: PolicyCheck, config: AbacusConfig, cwd: string, evaluatedAt: string, nativeConfig?: string) => AdapterResult;
 }
-const manifest = () => JSON.parse(fs.readFileSync(fileURLToPath(new URL("../package.json", import.meta.url)), "utf8")) as { version: string };
-export function blocks(check: Pick<CheckEvidence, "required" | "enforcement" | "outcome">): boolean {
+const manifest = () => { const data = jsonObject(fs.readFileSync(fileURLToPath(new URL("../package.json", import.meta.url)), "utf8")); if (typeof data.version !== "string") throw new Error("Invalid package version"); return { version: data.version }; };
+export function blocks(check: Pick<CheckEvidence, "required" | "enforcement" | "outcome" | "coverage">): boolean {
+  if (check.coverage?.status === "incomplete" && check.required) return true;
   if (["error", "incomplete", "not-applicable"].includes(check.outcome)) return check.required;
   return check.enforcement === "block" && check.outcome === "fail";
 }
 function adapter(check: PolicyCheck, config: AbacusConfig, cwd: string, evaluatedAt: string, nativeConfig?: string): AdapterResult {
   if (check.gate === "architecture") return runArchitecture(cwd, { configPath: nativeConfig, targets: check.parameters?.architecture?.targets });
   if (check.gate === "package") return runPackageValidation(cwd, check.parameters?.package);
-  if (CHECK_GATES.some((gate) => gate === check.gate)) return runSourceAdapter(check.gate as CheckGate, config, cwd, evaluatedAt, nativeConfig);
+  if (CHECK_GATES.some((gate) => gate === check.gate)) return runSourceAdapter(check.gate, config, cwd, evaluatedAt, nativeConfig);
   throw new Error("Unsupported adapter");
 }
 function checkEvidence(check: PolicyCheck, result: AdapterResult): CheckEvidence {
@@ -53,6 +56,15 @@ function compatibilityErrors(pack: ResolvedPolicyPack | undefined, checks: Check
   if (!pack) return;
   const tools = Object.fromEntries(checks.flatMap((check) => [...(check.tool ? [check.tool] : []), ...(check.tools ?? [])]).map((tool) => [tool.name, tool.version]));
   assertPolicyCompatibility(pack.pack, { abacus: version, tools });
+}
+function verificationChecks(config: AbacusConfig, cwd: string, source: RunEvidence["source"], at: string, exceptions: RepositoryException[]): CheckEvidence[] {
+  return (config.verification?.reports ?? []).map((spec) => {
+    const check = { id: `verification/${spec.id}`, gate: "verification", required: spec.required, enforcement: spec.enforcement, severity: "error" as const, rationale: `Repository-owned ${spec.profile} verification` };
+    const result = verificationEvidence(spec, cwd, source, at);
+    validateAdapterResult(result);
+    const evidence: CheckEvidence = { ...result, ...check, blocking: blocks({ ...check, ...result }), counts: { findings: result.findings.length, active: result.findings.length, waived: 0 } };
+    return applyExceptions(evidence, exceptions, at);
+  });
 }
 
 /** No baseline writes, network updates, native configuration rewrites, or fixes. */
@@ -89,6 +101,7 @@ export function evaluatePolicy(config: AbacusConfig, cwd = process.cwd(), option
     }
     return applyExceptions(checkEvidence(check, result), activeExceptions, evaluatedAt);
   });
+  checks.push(...verificationChecks(config, cwd, source, evaluatedAt, activeExceptions));
   if (policy && (!pinnedAtStart || !policyStable(policy))) checks.push(metadataError("policy-stability", "incomplete", "Pinned policy manifest or native configuration changed after resolution or during evaluation"));
   if (expired.length) {
     const findings = expired.map((entry) => finding("policy/expired-exception", `exception:${entry.id}`, `Exception ${entry.id} owned by ${entry.owner} expired on ${entry.expires}`));
@@ -110,6 +123,7 @@ export function printEvidence(run: RunEvidence): void {
     console.log(`${check.id}: ${check.outcome}${check.blocking ? " (blocking)" : ""}; scanned ${check.scope.scanned} ${check.scope.unit}; ${check.counts.active} active, ${check.counts.waived} waived findings`);
     for (const item of check.findings.slice(0, 20)) console.log(`  ${item.exceptionId ? "waived " : ""}${item.ruleId}: ${item.subject} ${item.message}`);
     for (const note of check.notes ?? []) console.log(`  ${note}`);
+    for (const reason of check.coverage?.reasons ?? []) console.log(`  Coverage ${check.coverage?.status}: ${reason}`);
   }
   console.log(`\n${run.clean ? "Checks completed without blockers" : "Checks have blockers"}; policy ${run.policy.name}@${run.policy.version}`);
 }

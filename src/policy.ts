@@ -1,3 +1,4 @@
+import { objectValue, isRecord } from "./json-values.js";
 import fs from "node:fs";
 import path from "node:path";
 import { bundledFile, relativeFile, validateNativeClosure } from "./policy-native.js";
@@ -7,7 +8,7 @@ import { digest, finding, type AdapterResult, type CheckEvidence, type Enforceme
 export const POLICY_GATES = [...CHECK_GATES, "architecture", "package"] as const;
 export type PolicyGate = typeof POLICY_GATES[number];
 type DeepPartial<T> = T extends (infer U)[] ? U[] : T extends object ? { [K in keyof T]?: DeepPartial<T[K]> } : T;
-export type PolicyParameters = DeepPartial<Omit<AbacusConfig, "check" | "policy">> & {
+export type PolicyParameters = DeepPartial<Omit<AbacusConfig, "check" | "policy" | "verification">> & {
   architecture?: { targets?: string[] };
   package?: { modes?: Array<"node16-esm" | "node16-cjs" | "bundler">; publintLevel?: "suggestion" | "warning" | "error"; attwProfile?: "strict" | "node16" | "esm-only" };
 };
@@ -57,8 +58,7 @@ const SEMVER = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[
 const SHA256 = /^[a-f0-9]{64}$/u;
 const NAME = /^(?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*$/u;
 function object(value: unknown, label: string): Record<string, unknown> {
-  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error(`${label} must be an object`);
-  return value as Record<string, unknown>;
+  return objectValue(value, `${label} must be an object`);
 }
 function keys(value: Record<string, unknown>, allowed: string[], label: string): void {
   const extra = Object.keys(value).filter((key) => !allowed.includes(key));
@@ -126,7 +126,8 @@ function packageParameters(value: unknown, label: string): void {
     attwProfile: (input, name) => enumeration(input, ["strict", "node16", "esm-only"], name),
   }, label);
 }
-export function validatePolicyParameters(value: unknown): PolicyParameters {
+export function validatePolicyParameters(value: unknown): PolicyParameters { assertPolicyParameters(value); return structuredClone(value); }
+function assertPolicyParameters(value: unknown): asserts value is PolicyParameters {
   settings(value, {
     preset: (input, name) => enumeration(input, ["typescript", "cloudflare-worker", "vite-spa", "nextjs"], name),
     roots: list, exclude: (input, name) => { list(input, name); for (const expr of input) { try { new RegExp(expr).test(""); } catch { throw new Error(`${name} must contain valid regex strings`); } } },
@@ -134,7 +135,7 @@ export function validatePolicyParameters(value: unknown): PolicyParameters {
     tsc: (input, name) => settings(input, { projects: (val, key) => { validateTscProjects(val, key); } }, name),
     architecture: (input, name) => settings(input, { targets: list }, name), package: packageParameters,
   }, "parameters");
-  return structuredClone(value) as PolicyParameters;
+
 }
 
 /** Deliberately bounded: exact versions or whitespace-conjoined >=, >, <=, <, = comparators. */
@@ -142,7 +143,8 @@ function constraints(value: unknown, label: string): asserts value is string {
   text(value, label);
   for (const part of value.split(/\s+/u)) semver(part.replace(/^(?:>=|<=|>|<|=)/u, ""), label);
 }
-export function validatePolicyPack(value: unknown): PolicyPack {
+export function validatePolicyPack(value: unknown): PolicyPack { assertPolicyPack(value); return structuredClone(value); }
+function assertPolicyPack(value: unknown): asserts value is PolicyPack {
   const pack = object(value, "policy pack"); keys(pack, ["schemaVersion", "name", "version", "compatibility", "checks", "nativeFiles"], "policy pack");
   if (pack.schemaVersion !== 1) throw new Error("policy pack schemaVersion must be 1");
   text(pack.name, "policy pack name"); if (!NAME.test(pack.name)) throw new Error("policy pack name must be an npm-style lowercase name");
@@ -167,7 +169,7 @@ export function validatePolicyPack(value: unknown): PolicyPack {
     }
   }
   if (pack.nativeFiles !== undefined) { list(pack.nativeFiles, "nativeFiles"); for (const file of pack.nativeFiles) relativeFile(file, "nativeFiles entry"); }
-  return structuredClone(value) as PolicyPack;
+
 }
 
 /** Stable key ordering makes JSON whitespace/ordering irrelevant, while every native byte is pinned. */
@@ -268,18 +270,19 @@ export function assertPolicyCompatibility(pack: PolicyPack, runtime: PolicyRunti
 function validDate(date: string): boolean { return /^\d{4}-\d{2}-\d{2}$/u.test(date) && Number.isFinite(Date.parse(`${date}T00:00:00.000Z`)) && new Date(`${date}T00:00:00.000Z`).toISOString().slice(0, 10) === date; }
 export function validateExceptions(value: unknown): RepositoryException[] {
   if (!Array.isArray(value)) throw new Error("repository exceptions must be a list");
-  const ids = new Set<string>(), targets = new Set<string>();
+  const ids = new Set<string>(), targets = new Set<string>(), output: RepositoryException[] = [];
   for (const entry of value) {
     const item = object(entry, "exception"); keys(item, ["id", "ruleId", "subject", "owner", "reason", "expires"], "exception");
-    for (const key of ["id", "ruleId", "subject", "owner", "reason", "expires"]) text(item[key], `exception.${key}`);
-    if (item.ruleId === "policy/expired-exception") throw new Error("exception cannot waive policy expiration governance");
-    if ((item.ruleId as string).includes("*") || (item.subject as string).includes("*")) throw new Error("exception ruleId/subject must be exact, without wildcard matching");
-    if (!validDate(item.expires as string)) throw new Error("exception.expires must be a valid YYYY-MM-DD date");
-    const target = JSON.stringify([item.ruleId, item.subject]);
-    if (ids.has(item.id as string) || targets.has(target)) throw new Error("duplicate exception id or exact ruleId/subject target");
-    ids.add(item.id as string); targets.add(target);
+    const checked = (key: string) => { const field = item[key]; text(field, `exception.${key}`); return field; };
+    const fields = { id: checked("id"), ruleId: checked("ruleId"), subject: checked("subject"), owner: checked("owner"), reason: checked("reason"), expires: checked("expires") };
+    if (fields.ruleId === "policy/expired-exception") throw new Error("exception cannot waive policy expiration governance");
+    if (fields.ruleId.includes("*") || fields.subject.includes("*")) throw new Error("exception ruleId/subject must be exact, without wildcard matching");
+    if (!validDate(fields.expires)) throw new Error("exception.expires must be a valid YYYY-MM-DD date");
+    const target = JSON.stringify([fields.ruleId, fields.subject]);
+    if (ids.has(fields.id) || targets.has(target)) throw new Error("duplicate exception id or exact ruleId/subject target");
+    ids.add(fields.id); targets.add(target); output.push(fields);
   }
-  return structuredClone(value) as RepositoryException[];
+  return output;
 }
 export function evaluationDate(evaluatedAt: string): string {
   if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/u.test(evaluatedAt) || !validDate(evaluatedAt.slice(0, 10)) || !Number.isFinite(Date.parse(evaluatedAt))) throw new Error("evaluatedAt must be an explicit valid ISO timestamp with timezone");
@@ -287,6 +290,9 @@ export function evaluationDate(evaluatedAt: string): string {
 }
 export function expiredExceptions(exceptions: RepositoryException[], evaluatedAt: string): RepositoryException[] {
   const date = evaluationDate(evaluatedAt); return validateExceptions(exceptions).filter((exception) => exception.expires < date);
+}
+function checkMetadata(value: AdapterResult): value is AdapterResult & Pick<CheckEvidence, "counts" | "blocking" | "enforcement" | "required"> {
+  return "counts" in value && isRecord(value.counts) && "required" in value && typeof value.required === "boolean" && "enforcement" in value && ["block", "warn", "observe"].some((mode) => mode === value.enforcement);
 }
 /** Pure, exact-match overlays. Waivers cannot turn tool errors or incomplete scans into success. */
 export function applyExceptions<T extends AdapterResult>(result: T, exceptions: RepositoryException[], evaluatedAt: string): T {
@@ -303,10 +309,10 @@ export function applyExceptions<T extends AdapterResult>(result: T, exceptions: 
     else if ((copy.outcome === "fail" || copy.outcome === "waived") && copy.findings.length && !activeCount) copy.outcome = "waived";
     else if (copy.outcome === "waived" && activeCount) copy.outcome = "fail";
   }
-  if ("counts" in copy) {
-    const check = copy as T & CheckEvidence;
+  if (checkMetadata(copy)) {
+    const check = copy;
     check.counts = { findings: copy.findings.length, waived: copy.findings.length - activeCount, active: activeCount };
-    check.blocking = (check.enforcement === "block" && check.outcome === "fail") || (check.required && ["error", "incomplete", "not-applicable"].includes(check.outcome));
+    check.blocking = (check.enforcement === "block" && check.outcome === "fail") || (check.required && (["error", "incomplete", "not-applicable"].includes(check.outcome) || check.coverage?.status === "incomplete"));
   }
   return copy;
 }
@@ -321,5 +327,7 @@ export function applyPolicyParameters(config: AbacusConfig, parameters?: PolicyP
     for (const [key, val] of Object.entries(patch)) Object.defineProperty(output, key, { value: merge(Object.hasOwn(output, key) ? output[key] : undefined, val), writable: true, enumerable: true, configurable: true });
     return output;
   };
-  return merge(config, validated) as AbacusConfig;
+  const output = structuredClone(config);
+  for (const [key, value] of Object.entries(validated)) Object.defineProperty(output, key, { value: merge(Reflect.get(output, key), value), writable: true, enumerable: true, configurable: true });
+  return output;
 }

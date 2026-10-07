@@ -1,11 +1,10 @@
+import { objectValue } from "./json-values.js";
 import fs from "node:fs";
 import path from "node:path";
 import ts from "typescript";
 import { parse as parseToml } from "smol-toml";
 function object(value, label) {
-    if (!value || typeof value !== "object" || Array.isArray(value))
-        throw new Error(`${label} must be an object`);
-    return value;
+    return objectValue(value, `${label} must be an object`);
 }
 function text(value, label) {
     if (typeof value !== "string" || !value.trim())
@@ -59,7 +58,7 @@ function nativeLiteral(node) {
 function staticNativeJs(source, file) {
     const ast = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.JS);
     const diagnostics = Reflect.get(ast, "parseDiagnostics");
-    if (diagnostics.length)
+    if (!Array.isArray(diagnostics) || diagnostics.length)
         throw new Error("pinned JavaScript native config contains syntax errors");
     const statements = ast.statements.filter((statement) => !(ts.isExpressionStatement(statement) && ts.isStringLiteral(statement.expression) && statement.expression.text === "use strict"));
     const statement = statements[0];

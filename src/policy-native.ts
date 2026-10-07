@@ -1,11 +1,11 @@
+import { objectValue } from "./json-values.js";
 import fs from "node:fs";
 import path from "node:path";
 import ts from "typescript";
 import { parse as parseToml } from "smol-toml";
 
 function object(value: unknown, label: string): Record<string, unknown> {
-  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error(`${label} must be an object`);
-  return value as Record<string, unknown>;
+  return objectValue(value, `${label} must be an object`);
 }
 function text(value: unknown, label: string): asserts value is string {
   if (typeof value !== "string" || !value.trim()) throw new Error(`${label} must be a nonempty string`);
@@ -50,8 +50,8 @@ function nativeLiteral(node: ts.Node): boolean {
 /** Pinned JavaScript configs are data-only module.exports literals, never executable imports. */
 function staticNativeJs(source: string, file: string): ts.Expression {
   const ast = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.JS);
-  const diagnostics = Reflect.get(ast, "parseDiagnostics") as readonly unknown[];
-  if (diagnostics.length) throw new Error("pinned JavaScript native config contains syntax errors");
+  const diagnostics: unknown = Reflect.get(ast, "parseDiagnostics");
+  if (!Array.isArray(diagnostics) || diagnostics.length) throw new Error("pinned JavaScript native config contains syntax errors");
   const statements = ast.statements.filter((statement) => !(ts.isExpressionStatement(statement) && ts.isStringLiteral(statement.expression) && statement.expression.text === "use strict"));
   const statement = statements[0];
   if (statements.length !== 1 || !statement || !ts.isExpressionStatement(statement) || !ts.isBinaryExpression(statement.expression)) throw new Error("pinned JavaScript native config must be a data-only module.exports literal");

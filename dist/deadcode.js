@@ -1,3 +1,4 @@
+import { jsonObject, objectValue, arrayValue, stringValue, numberValue } from "./json-values.js";
 /**
  * `abacus deadcode` — unused exports, files, types, and dependencies via knip.
  *
@@ -32,16 +33,18 @@ const ISSUE_TYPES = [
 /** Parse knip's `--reporter json` output into a flat issue list. Exported for tests. */
 export function parseKnipJson(stdout) {
     const json = stdout.slice(stdout.indexOf("{"));
-    const data = JSON.parse(json);
+    const data = jsonObject(json);
     const issues = [];
     const counts = {};
-    for (const fileIssues of data.issues ?? []) {
+    for (const value of arrayValue(data.issues ?? [])) {
+        const fileIssues = objectValue(value), file = stringValue(fileIssues.file);
         for (const type of ISSUE_TYPES) {
             const items = fileIssues[type];
             if (!Array.isArray(items))
                 continue;
-            for (const item of items) {
-                issues.push({ type, file: fileIssues.file, line: item.line ?? item.pos, name: item.name ?? fileIssues.file });
+            for (const itemValue of items) {
+                const item = objectValue(itemValue), line = item.line ?? item.pos;
+                issues.push({ type, file, line: line === undefined ? undefined : numberValue(line), name: item.name === undefined ? file : stringValue(item.name) });
                 counts[type] = (counts[type] ?? 0) + 1;
             }
         }
@@ -106,7 +109,7 @@ export function detectKnipEntry(cwd = process.cwd()) {
     const pkgFile = path.join(cwd, "package.json");
     if (fs.existsSync(pkgFile)) {
         try {
-            const pkg = JSON.parse(fs.readFileSync(pkgFile, "utf8"));
+            const pkg = jsonObject(fs.readFileSync(pkgFile, "utf8"));
             const push = (v) => {
                 if (typeof v === "string" && /\.(tsx?|mjs|js)$/.test(v)) {
                     entry.add(v.replace(/^\.\//, ""));

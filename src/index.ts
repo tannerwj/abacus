@@ -11,3 +11,7 @@ export { runArchitecture, type ArchitectureOptions } from "./architecture.js";
 export { runPackageValidation, type PackageValidationOptions } from "./package-validation.js";
 export { type Outcome, type Enforcement, type Finding, type AdapterResult, type CheckEvidence, type RunEvidence } from "./evidence.js";
 export { typescriptEvidence, reportTypeScriptProfile } from "./typescript-profile.js";
+export { recordVerification, verificationEvidence, type VerificationRecord, type RecordVerificationOptions } from "./verification.js";
+export { parseVerificationReport, type ReportFormat, type VerificationSummary, type Measurement } from "./verification-reports.js";
+export { validateVerificationConfig, type VerificationConfig, type VerificationSpec, type VerificationBudget, type VerificationProfile } from "./verification-config.js";
+export { reportStandards, type StandardsReport, type StandardsChange, type StandardsClassification } from "./standards.js";

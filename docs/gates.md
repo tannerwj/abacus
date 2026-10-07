@@ -70,6 +70,12 @@ sum or largest-file limit.
 
 Fixed budgets get written up to. The ratchet makes the current value the ceiling:
 
+New configs enable lint-count and maximum-complexity ratchets. LOC and comment
+ceilings are explicit opt-ins; existing configs that inherited the older defaults
+retain them. Review growth in context rather than shortening or compressing code
+to satisfy a metric. ABC evidence also reports total complexity and over-budget
+function counts. The following example deliberately enables growth metrics:
+
 ```json
 "ratchet": { "file": "abacus.ratchet.json", "metrics": {
   "loc": { "roots": ["src"], "slack": 0.02 }, "oxlintWarnings": true, "abcMax": true,
@@ -130,11 +136,10 @@ there is no `src/`. Native error-level violations make the command fail. Cycles 
 fragile and signal that shared code wants its own module. `abacus init` writes
 a `.dependency-cruiser.cjs`; exempt intentional cycles there rather than
 ignoring the gate.
-Unresolved imports warn that cycle coverage may be incomplete. In the current
-implementation, this applies to individual commands and aggregate evidence:
-a cycle check can still pass when imports are unresolved. Resolve aliases and
-runtime-specific imports before relying on a passing result for full coverage.
-The opt-in architecture profile treats unresolved imports as incomplete.
+Unresolved imports are reported separately as incomplete coverage. Standalone
+checks exit 1; required aggregate coverage blocks even under advisory enforcement.
+Native cycle findings remain visible, and an exact waiver cannot waive missing
+coverage. Resolve aliases and runtime-specific imports before relying on the graph.
 
 Known upstream limitation: dependency-cruiser 18 can fail config loading with
 `URI malformed` when a project path contains a literal `%`. Space-containing

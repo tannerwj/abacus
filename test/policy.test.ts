@@ -2,9 +2,11 @@ import { afterEach, describe, expect, test } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import * as hegel from "@hegeldev/hegel";
+import * as gs from "@hegeldev/hegel/generators";
 import { defaults } from "../src/config.js";
 import { digest, finding, type AdapterResult, type CheckEvidence } from "../src/evidence.js";
-import { applyExceptions, applyPolicyParameters, assertPolicyCompatibility, computePolicyPackDigest, expiredExceptions, resolvePolicyPack, satisfiesToolVersion, validateExceptions, validatePolicyPack, type PolicyPack, type PolicyPackReference, type RepositoryException } from "../src/policy.js";
+import { applyExceptions, applyPolicyParameters, assertPolicyCompatibility, canonicalPolicyJson, computePolicyPackDigest, expiredExceptions, resolvePolicyPack, satisfiesToolVersion, validateExceptions, validatePolicyPack, type PolicyPack, type PolicyPackReference, type RepositoryException } from "../src/policy.js";
 
 const temporary: string[] = [];
 function temp(): string { const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "abacus-policy-")); temporary.push(cwd); return cwd; }
@@ -14,6 +16,44 @@ function pack(): PolicyPack { return validatePolicyPack(JSON.parse(fs.readFileSy
 function pin(file = fixture): PolicyPackReference { return { path: file, version: pack().version, digest: computePolicyPackDigest(file) }; }
 const exception: RepositoryException = { id: "known-abc-debt", ruleId: "abc/budget", subject: "src/a.ts fn", owner: "platform-team", reason: "Tracked decomposition after migration", expires: "2026-10-04" };
 function failed(): AdapterResult { return { outcome: "fail", scope: { kind: "file", targets: ["src/a.ts"], scanned: 1, unit: "functions" }, findings: [finding(exception.ruleId, exception.subject, "over budget")] }; }
+
+const propertySettings = { testCases: 2000, seed: Number(process.env.ABACUS_PBT_SEED ?? 20261007), database: hegel.Database.disabled };
+
+describe("policy properties", () => {
+  test("canonical JSON is invariant under object key permutations including hostile keys", () => hegel.test((tc) => {
+    const entries = tc.draw(gs.arrays(gs.tuples(gs.text({ maxSize: 128 }), gs.integers()), { maxSize: 64 }));
+    const value = Object.fromEntries(entries);
+    const permuted = Object.fromEntries(Object.entries(value).reverse());
+    expect(canonicalPolicyJson(value)).toBe(canonicalPolicyJson(permuted));
+  }, propertySettings));
+
+  test("canonical JSON preserves array order and every generated integer value", () => hegel.test((tc) => {
+    const values = tc.draw(gs.arrays(gs.integers(), { maxSize: 128 }));
+    expect(JSON.parse(canonicalPolicyJson(values))).toEqual(values);
+  }, propertySettings));
+
+  test("exact waivers cannot affect a different rule or subject", () => hegel.test((tc) => {
+    const suffix = String(tc.draw(gs.integers()));
+    const field = tc.draw(gs.sampledFrom(["ruleId", "subject"] as const));
+    const value = failed(); value.findings[0][field] += `:${suffix}`;
+    expect(applyExceptions(value, [exception], "2026-10-04T00:00:00Z").outcome).toBe("fail");
+  }, propertySettings));
+
+  test("matching waivers preserve every tool or applicability failure", () => hegel.test((tc) => {
+    const outcome = tc.draw(gs.sampledFrom(["error", "incomplete", "not-applicable"] as const));
+    expect(applyExceptions({ ...failed(), outcome }, [exception], "2026-10-04T00:00:00Z").outcome).toBe(outcome);
+  }, propertySettings));
+
+  test("numeric semantic version increments preserve order across arbitrary digit widths", () => hegel.test((tc) => {
+    const number = tc.draw(gs.bigIntegers({ minValue: 0n }));
+    expect(satisfiesToolVersion(`1.${number + 1n}.0`, `>1.${number}.0`)).toBe(true);
+  }, propertySettings));
+
+  test("invalid exact-version leading zeros are always rejected", () => hegel.test((tc) => {
+    const number = tc.draw(gs.bigIntegers({ minValue: 0n }));
+    expect(() => satisfiesToolVersion(`1.0${number}.0`, ">=1.0.0")).toThrow(/semantic version/);
+  }, propertySettings));
+});
 
 describe("versioned policy packs", () => {
   test("resolves a pinned local pack and records every native config", () => {
@@ -143,7 +183,8 @@ describe("versioned policy packs", () => {
     expect(applyPolicyParameters(base, { size: { worker: { max: 1000, wranglerArgs: args } } }).size.worker?.wranglerArgs).toEqual(args);
   });
   test("merges bounded parameters without mutating config or rewriting a baseline", () => {
-    const base = defaults("typescript"), snapshot = structuredClone(base);
+    const base = defaults("typescript"); base.ratchet.metrics.comments = { roots: ["src"], max: 0.3 };
+    const snapshot = structuredClone(base);
     const merged = applyPolicyParameters(base, { roots: ["lib"], abc: { budget: 45 }, size: { worker: { max: 4096 } }, ratchet: { metrics: { comments: { max: 0.2 } } } });
     expect(merged.abc.budget).toBe(45); expect(merged.roots).toEqual(["lib"]); expect(merged.size.worker).toEqual({ max: 4096 });
     expect(merged.ratchet.file).toBe(base.ratchet.file); expect(merged.ratchet.metrics.comments?.roots).toEqual(["src"]); expect(base).toEqual(snapshot);

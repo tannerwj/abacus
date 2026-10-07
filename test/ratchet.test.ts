@@ -1,3 +1,4 @@
+import { jsonObject } from "../src/json-values.js";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -152,7 +153,7 @@ describe("ratchet", () => {
   test("explicit writes create the snapshot; growth past slack or fixed max fails; shrink passes", () => {
     const { dir, config, snapshotFile } = project();
     expect(reportRatchet(config, true, dir)).toBe(true);
-    const written = JSON.parse(fs.readFileSync(snapshotFile, "utf8")) as Record<string, number>;
+    const written = jsonObject(fs.readFileSync(snapshotFile, "utf8"));
     expect(written["loc src"]).toBe(5);
 
     const tooSmall = JSON.stringify({ ...written, "loc src": 4 });

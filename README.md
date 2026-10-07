@@ -53,6 +53,10 @@ covers existing configs, adding gates, and your first CI check.
   and source/configuration/tool provenance
 - **Standards you can upgrade deliberately.** Optional pinned policy packs and
   previews compare policies against the same unchanged project before adoption
+- **Behavior you can verify.** Opt-in test and audit evidence binds real runs to
+  source, with authorization, resilience and measured performance profiles
+- **Changes to the standards you can review.** Compare budgets, baselines,
+  coverage requirements and native configuration against a Git revision
 
 Use individual commands while fixing a finding, or select source gates together:
 
@@ -88,6 +92,9 @@ installed separately for Worker measurements.
 - [Policy packs and upgrade previews](docs/policy-packs.md): versioned shared standards
 - [Compiler projects](docs/compiler-projects.md): check separate platform configurations
 - [Architecture and package profiles](docs/profiles.md): boundaries and packed-library consumers
+- [Behavioral verification](docs/verification.md): real test/audit reports and risk profiles
+- [Standards changes](docs/standards-changes.md): review changes to the definition of passing
+- [Engineering policy](docs/engineering-policy.md): requirements, independent tests and reviewer judgment
 
 The package includes `docs/`, so these guides are also available in
 `node_modules/@tjohnson/abacus/docs`.
@@ -99,9 +106,9 @@ adopting them, and commit the lockfile to pin your installed Git revision and to
 The supported setup here is a Git install; the package name is not a claim of an
 npm release.
 
-Coverage matters as much as a green result. Current cycle checks warn on unresolved
-imports and can still pass with incomplete graph coverage, including in aggregate
-evidence. Fix resolution warnings before relying on that result. See
+Coverage matters as much as a green result. Cycle checks retain detected findings
+and report unresolved imports as incomplete coverage. Required graph coverage
+blocks independently of whether a cycle was found or waived. See
 [cycle checks](docs/gates.md#circular-dependencies) and [evidence boundaries](docs/evidence.md).
 
 ## Community

@@ -53,6 +53,10 @@ export interface AdapterResult {
         excluded?: string[];
     };
     findings: Finding[];
+    coverage?: {
+        status: "complete" | "incomplete";
+        reasons: string[];
+    };
     metrics?: Record<string, number>;
     notes?: string[];
     tool?: {

@@ -54,6 +54,15 @@ contains spaces. It needs network access for dependencies and the Gitleaks binar
 Include actual results in your pull request. If a check cannot run or exposes
 an existing failure, report it explicitly instead of calling the change fully verified.
 
+Verification adapters, coverage handling, defaults and standards reporting also
+require `pnpm test:verification`. This runs real Vitest and Playwright API tests
+without downloading browsers and retains rerunnable CLI regression scenarios.
+`pnpm test:properties` runs the Hegel invariants and demonstrates four failures
+by restoring faulty behavior in an isolated copy. Seeded cases can be replayed
+with `ABACUS_PBT_SEED`; keep the minimized counterexample on any new failure.
+See [engineering policy](docs/engineering-policy.md) for independent oracles and
+the [property coverage inventory](docs/property-testing.md).
+
 ## Making a change
 
 1. Create a focused branch in your fork or checkout

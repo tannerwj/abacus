@@ -33,7 +33,7 @@ describe("todos gate", () => {
     });
     try {
       const files = sourceFiles(dir);
-      expect(files.map((f) => path.relative(dir, f)).sort()).toEqual(["src/a.ts", "src/b.js"]);
+      expect(files.map((f) => path.relative(dir, f)).sort((a, b) => a.localeCompare(b))).toEqual(["src/a.ts", "src/b.js"]);
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
     }

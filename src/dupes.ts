@@ -1,3 +1,4 @@
+import { jsonObject, objectValue, arrayValue, stringValue, numberValue } from "./json-values.js";
 /**
  * `abacus dupes` — copy-paste duplication gate via jscpd.
  *
@@ -51,7 +52,7 @@ export function thresholdFor(cwd = process.cwd(), file?: string): number {
   const configPath = file ?? path.join(cwd, ".jscpd.json");
   if (fs.existsSync(configPath)) {
     try {
-      const config = JSON.parse(fs.readFileSync(configPath, "utf8")) as { threshold?: unknown };
+      const config = jsonObject(fs.readFileSync(configPath, "utf8"));
       if (typeof config.threshold === "number" && config.threshold >= 0) return config.threshold;
     } catch {
       // Malformed config: fall through to default; jscpd will surface the error.
@@ -59,6 +60,8 @@ export function thresholdFor(cwd = process.cwd(), file?: string): number {
   }
   return DEFAULT_THRESHOLD;
 }
+
+const cloneSide = (value: unknown) => { const side = objectValue(value); return { file: stringValue(side.name), start: numberValue(side.start), end: numberValue(side.end) }; };
 
 export function runDupes(cwd = process.cwd(), file?: string): DupesResult {
   const bin = jscpdBinPath(cwd);
@@ -85,26 +88,14 @@ export function runDupes(cwd = process.cwd(), file?: string): DupesResult {
     if (!fs.existsSync(reportPath)) {
       throw new Error(`jscpd produced no report (stderr: ${(out.stderr ?? "").slice(0, 500)})`);
     }
-    const report = JSON.parse(fs.readFileSync(reportPath, "utf8")) as {
-      duplicates: Array<{
-        lines: number;
-        tokens: number;
-        firstFile: { name: string; start: number; end: number };
-        secondFile: { name: string; start: number; end: number };
-      }>;
-      statistics: {
-        total: { percentage: number; sources: number };
-      };
-    };
+    const report = jsonObject(fs.readFileSync(reportPath, "utf8"));
 
-    const clones: Clone[] = (report.duplicates ?? []).map((d) => ({
-      lines: d.lines,
-      tokens: d.tokens,
-      first: { file: d.firstFile.name, start: d.firstFile.start, end: d.firstFile.end },
-      second: { file: d.secondFile.name, start: d.secondFile.start, end: d.secondFile.end },
-    }));
-    const { percentage, files } = reportStatistics(report.statistics?.total);
-    if (!Array.isArray(report.duplicates)) throw new Error("jscpd report has invalid duplicates");
+    const clones: Clone[] = arrayValue(report.duplicates).map((value) => {
+      const duplicate = objectValue(value);
+      return { lines: numberValue(duplicate.lines), tokens: numberValue(duplicate.tokens), first: cloneSide(duplicate.firstFile), second: cloneSide(duplicate.secondFile) };
+    });
+    const total = objectValue(objectValue(report.statistics).total);
+    const { percentage, files } = reportStatistics({ percentage: numberValue(total.percentage), sources: numberValue(total.sources) });
     if (out.status !== 0 && percentage <= threshold) throw new Error("jscpd exited nonzero without a threshold violation");
     return { clean: percentage <= threshold, percentage, threshold, clones, files };
   } finally {

@@ -36,6 +36,7 @@ export interface AdapterResult {
   outcome: Outcome;
   scope: { kind: ScopeKind; targets: string[]; scanned: number; unit: string; excluded?: string[] };
   findings: Finding[];
+  coverage?: { status: "complete" | "incomplete"; reasons: string[] };
   metrics?: Record<string, number>;
   notes?: string[];
   tool?: { name: string; version: string; digest?: string };
@@ -86,7 +87,11 @@ export function finding(ruleId: string, subject: string, message: string, severi
   return { ruleId, subject, message, severity, fingerprint: digest(JSON.stringify([1, ruleId, subject])) };
 }
 
+function validateCoverage(coverage: AdapterResult["coverage"]): void {
+  if (coverage && (!["complete", "incomplete"].includes(coverage.status) || !Array.isArray(coverage.reasons) || !coverage.reasons.every((reason) => typeof reason === "string") || (coverage.status === "incomplete" && !coverage.reasons.length))) throw new Error("Invalid adapter coverage");
+}
 export function validateAdapterResult(result: AdapterResult): void {
+  validateCoverage(result.coverage);
   if (!["pass", "fail", "waived", "not-applicable", "incomplete", "error"].includes(result.outcome)) throw new Error("Invalid adapter outcome");
   if (!result.scope || !["file", "package", "graph", "repository", "built-assets"].includes(result.scope.kind) || !Array.isArray(result.scope.targets) || !result.scope.targets.every((item) => typeof item === "string") || !Number.isInteger(result.scope.scanned) || result.scope.scanned < 0 || !result.scope.unit) throw new Error("Invalid adapter scope");
   if (!Array.isArray(result.findings)) throw new Error("Invalid adapter findings");

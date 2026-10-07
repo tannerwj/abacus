@@ -1,3 +1,4 @@
+import { arrayValue, objectValue, stringValue, numberValue } from "./json-values.js";
 /**
  * `abacus secrets` — leaked-credential scan via gitleaks.
  *
@@ -36,7 +37,8 @@ export function scanSecretReport(cwd = process.cwd(), configPath) {
         }
         if (!fs.existsSync(reportPath))
             throw new Error("gitleaks produced no report");
-        const raw = JSON.parse(fs.readFileSync(reportPath, "utf8"));
+        const parsed = JSON.parse(fs.readFileSync(reportPath, "utf8"));
+        const raw = arrayValue(parsed).map((value) => { const item = objectValue(value); return { File: stringValue(item.File), StartLine: numberValue(item.StartLine), RuleID: stringValue(item.RuleID), Description: item.Description === undefined ? "" : stringValue(item.Description) }; });
         if (!Array.isArray(raw) || !raw.every((f) => typeof f.File === "string" && Number.isInteger(f.StartLine) && typeof f.RuleID === "string"))
             throw new Error("gitleaks produced an invalid report");
         if (out.status === 1 && raw.length === 0)

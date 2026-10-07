@@ -9,11 +9,14 @@ Describe the change and the problem it solves. Link a related issue if there is 
 - [ ] I updated user-facing docs/help if needed
 - [ ] I rebuilt and included `dist/` changes for source edits
 - [ ] I reviewed baseline, budget, exception, and lockfile changes, if any
+- [ ] I reviewed `abacus standards --base <review-base> --json` and explained any weakening
+- [ ] I checked authorization, replay/concurrency, performance and dependency risks where applicable
+- [ ] Expected values have an independent basis; new regression tests fail with the faulty behavior restored
 
 ### Commands and results
 
-Include passed, failed, and blocked checks. Use `pnpm check:all`; add `pnpm test:install`
-for packaging, tool discovery, initialization, or consumer behavior changes.
+Include passed, failed, and blocked checks. Run `pnpm check:all`, `pnpm test:verification`,
+`pnpm test:properties` and `pnpm test:install` as required by [repository policy](../AGENTS.md).
 
 ## Notes for review
 

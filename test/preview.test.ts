@@ -1,5 +1,7 @@
 import { describe, expect, test } from "vitest";
 import fs from "node:fs";
+import * as hegel from "@hegeldev/hegel";
+import * as gs from "@hegeldev/hegel/generators";
 import { digest, finding, type CheckEvidence, type Finding, type RunEvidence } from "../src/evidence.js";
 import { comparePolicyRuns } from "../src/preview.js";
 import { validatePolicyPack, type PolicyPack, type RepositoryException } from "../src/policy.js";
@@ -17,6 +19,14 @@ function run(policy: PolicyPack): RunEvidence {
 function findCheck(evidence: RunEvidence, id = "function-complexity"): CheckEvidence { return evidence.checks.find((item) => item.id === id)!; }
 function fail(target: CheckEvidence, items: Finding[], blocking = false): void { target.findings = items; target.outcome = "fail"; target.blocking = blocking; target.counts = { findings: items.length, waived: items.filter((item) => item.exceptionId).length, active: items.filter((item) => !item.exceptionId).length }; }
 const exception: RepositoryException = { id: "legacy-complexity", ruleId: "abc/budget", subject: "src/a.ts fn", owner: "team", reason: "Tracked decomposition", expires: "2026-12-31" };
+
+test("comparing identical generated evidence never invents finding changes", () => hegel.test((tc) => {
+  const evidence = run(pack());
+  const subjects = tc.draw(gs.arrays(gs.integers(), { maxSize: 64 }));
+  fail(evidence.checks[0], [...new Set(subjects)].map((subject) => finding("abc/budget", String(subject), "Over budget")), true);
+  const comparison = comparePolicyRuns(evidence, structuredClone(evidence));
+  expect([comparison.addedFindings, comparison.resolvedFindings, comparison.newBlockers]).toEqual([[], [], []]);
+}, { testCases: 2000, seed: Number(process.env.ABACUS_PBT_SEED ?? 20261007), database: hegel.Database.disabled }));
 
 describe("pure policy upgrade preview", () => {
   test("compares versioned thresholds and enforcement without editing either run or pack", () => {

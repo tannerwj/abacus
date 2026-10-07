@@ -1,3 +1,4 @@
+import { jsonObject, objectValue, arrayValue, stringValue, numberValue } from "./json-values.js";
 /**
  * `abacus deadcode` — unused exports, files, types, and dependencies via knip.
  *
@@ -39,8 +40,6 @@ export function knipBinPath(): string {
   return bin;
 }
 
-interface KnipJsonItem { name?: string; line?: number; pos?: number }
-interface KnipJsonFile { file: string; [type: string]: unknown }
 
 const ISSUE_TYPES = [
   "files", "exports", "types", "enumMembers", "namespaceMembers",
@@ -51,15 +50,17 @@ const ISSUE_TYPES = [
 /** Parse knip's `--reporter json` output into a flat issue list. Exported for tests. */
 export function parseKnipJson(stdout: string): DeadcodeReport {
   const json = stdout.slice(stdout.indexOf("{"));
-  const data = JSON.parse(json) as { issues?: KnipJsonFile[] };
+  const data = jsonObject(json);
   const issues: DeadcodeIssue[] = [];
   const counts: Record<string, number> = {};
-  for (const fileIssues of data.issues ?? []) {
+  for (const value of arrayValue(data.issues ?? [])) {
+    const fileIssues = objectValue(value), file = stringValue(fileIssues.file);
     for (const type of ISSUE_TYPES) {
-      const items = fileIssues[type] as KnipJsonItem[] | undefined;
+      const items = fileIssues[type];
       if (!Array.isArray(items)) continue;
-      for (const item of items) {
-        issues.push({ type, file: fileIssues.file, line: item.line ?? item.pos, name: item.name ?? fileIssues.file });
+      for (const itemValue of items) {
+        const item = objectValue(itemValue), line = item.line ?? item.pos;
+        issues.push({ type, file, line: line === undefined ? undefined : numberValue(line), name: item.name === undefined ? file : stringValue(item.name) });
         counts[type] = (counts[type] ?? 0) + 1;
       }
     }
@@ -75,7 +76,7 @@ export function runKnip(cwd = process.cwd()): DeadcodeReport {
   if (out.error) throw new Error(`knip failed to run: ${out.error.message}`);
   // knip exits 1 when it finds issues; the JSON report is still on stdout.
   if (!out.stdout.includes("{")) {
-    throw new Error(`knip produced no JSON output (exit ${out.status}): ${(out.stderr as string).slice(0, 500)}`);
+    throw new Error(`knip produced no JSON output (exit ${out.status}): ${out.stderr.slice(0, 500)}`);
   }
   return parseKnipJson(out.stdout);
 }
@@ -127,9 +128,7 @@ export function detectKnipEntry(cwd = process.cwd()): string[] {
   const pkgFile = path.join(cwd, "package.json");
   if (fs.existsSync(pkgFile)) {
     try {
-      const pkg = JSON.parse(fs.readFileSync(pkgFile, "utf8")) as {
-        main?: string; exports?: unknown; bin?: unknown;
-      };
+      const pkg = jsonObject(fs.readFileSync(pkgFile, "utf8"));
       const push = (v: unknown) => {
         if (typeof v === "string" && /\.(tsx?|mjs|js)$/.test(v)) {
           entry.add(v.replace(/^\.\//, ""));

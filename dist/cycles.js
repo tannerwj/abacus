@@ -87,7 +87,7 @@ export function reportCycles(cwd = process.cwd()) {
     }
     if (result.clean) {
         console.log("Cycles — no circular dependencies.\n");
-        return true;
+        return result.unresolved === 0;
     }
     console.log(`Cycles — ${result.violations.length} circular dependenc${result.violations.length === 1 ? "y" : "ies"}:\n`);
     for (const v of result.violations) {

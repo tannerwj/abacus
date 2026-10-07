@@ -1,3 +1,4 @@
+import { jsonObject } from "./json-values.js";
 import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 import { runArchitecture } from "./architecture.js";
@@ -7,8 +8,12 @@ import { runPackageValidation } from "./package-validation.js";
 import { applyExceptions, applyPolicyParameters, assertPolicyCompatibility, expiredExceptions, resolvePolicyPack, validateExceptions } from "./policy.js";
 import { sourceProvenance } from "./provenance.js";
 import { runSourceAdapter } from "./source-adapters.js";
-const manifest = () => JSON.parse(fs.readFileSync(fileURLToPath(new URL("../package.json", import.meta.url)), "utf8"));
+import { verificationEvidence } from "./verification.js";
+const manifest = () => { const data = jsonObject(fs.readFileSync(fileURLToPath(new URL("../package.json", import.meta.url)), "utf8")); if (typeof data.version !== "string")
+    throw new Error("Invalid package version"); return { version: data.version }; };
 export function blocks(check) {
+    if (check.coverage?.status === "incomplete" && check.required)
+        return true;
     if (["error", "incomplete", "not-applicable"].includes(check.outcome))
         return check.required;
     return check.enforcement === "block" && check.outcome === "fail";
@@ -56,6 +61,15 @@ function compatibilityErrors(pack, checks, version) {
     const tools = Object.fromEntries(checks.flatMap((check) => [...(check.tool ? [check.tool] : []), ...(check.tools ?? [])]).map((tool) => [tool.name, tool.version]));
     assertPolicyCompatibility(pack.pack, { abacus: version, tools });
 }
+function verificationChecks(config, cwd, source, at, exceptions) {
+    return (config.verification?.reports ?? []).map((spec) => {
+        const check = { id: `verification/${spec.id}`, gate: "verification", required: spec.required, enforcement: spec.enforcement, severity: "error", rationale: `Repository-owned ${spec.profile} verification` };
+        const result = verificationEvidence(spec, cwd, source, at);
+        validateAdapterResult(result);
+        const evidence = { ...result, ...check, blocking: blocks({ ...check, ...result }), counts: { findings: result.findings.length, active: result.findings.length, waived: 0 } };
+        return applyExceptions(evidence, exceptions, at);
+    });
+}
 /** No baseline writes, network updates, native configuration rewrites, or fixes. */
 export function evaluatePolicy(config, cwd = process.cwd(), options = {}) {
     validateAbacusConfig(config);
@@ -94,6 +108,7 @@ export function evaluatePolicy(config, cwd = process.cwd(), options = {}) {
         }
         return applyExceptions(checkEvidence(check, result), activeExceptions, evaluatedAt);
     });
+    checks.push(...verificationChecks(config, cwd, source, evaluatedAt, activeExceptions));
     if (policy && (!pinnedAtStart || !policyStable(policy)))
         checks.push(metadataError("policy-stability", "incomplete", "Pinned policy manifest or native configuration changed after resolution or during evaluation"));
     if (expired.length) {
@@ -121,6 +136,8 @@ export function printEvidence(run) {
             console.log(`  ${item.exceptionId ? "waived " : ""}${item.ruleId}: ${item.subject} ${item.message}`);
         for (const note of check.notes ?? [])
             console.log(`  ${note}`);
+        for (const reason of check.coverage?.reasons ?? [])
+            console.log(`  Coverage ${check.coverage?.status}: ${reason}`);
     }
     console.log(`\n${run.clean ? "Checks completed without blockers" : "Checks have blockers"}; policy ${run.policy.name}@${run.policy.version}`);
 }

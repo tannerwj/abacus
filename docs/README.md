@@ -16,6 +16,10 @@
 - [Policy packs and upgrade previews](policy-packs.md): pin shared standards and review changes
 - [Compiler projects](compiler-projects.md): select separate TypeScript projects explicitly
 - [Architecture and package profiles](profiles.md): configure complete graph checks and declared library consumers
+- [Behavioral verification](verification.md): bind test/audit reports and risk profiles to source
+- [Standards changes](standards-changes.md): compare configuration and baselines with a Git revision
+- [Engineering policy](engineering-policy.md): reviewer judgment and independent verification
+- [Cross-app standards additions](coding-standards-additions.md): reusable policy additions for Tanner's living standards
 
 ## Where configuration lives
 
@@ -28,3 +32,6 @@
 
 Run `pnpm exec abacus help` for the CLI command list. These guides ship in the
 package under `node_modules/@tjohnson/abacus/docs`.
+
+Review this implementation's deliberate baseline/dependency changes in
+[change validation](change-validation.md).

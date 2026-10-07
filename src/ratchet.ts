@@ -1,3 +1,4 @@
+import { jsonObject } from "./json-values.js";
 /**
  * `abacus ratchet` — aggregate ceilings that only move down. A snapshot
  * (abacus.ratchet.json) is the committed high-water mark; CI fails when a
@@ -54,8 +55,8 @@ function oxlintCount(cwd: string): number {
   if (out.error) throw new Error(`oxlint not runnable: ${out.error.message}`);
   const json = out.stdout.slice(out.stdout.indexOf("{"));
   if (out.status !== 0 && out.status !== 1) throw new Error("oxlint failed to collect ratchet diagnostics");
-  const report = JSON.parse(json) as { diagnostics: unknown[]; number_of_files: number };
-  if (!Array.isArray(report.diagnostics) || !Number.isInteger(report.number_of_files) || report.number_of_files <= 0) throw new Error("oxlint ratchet scan is invalid or empty");
+  const report = jsonObject(json);
+  if (!Array.isArray(report.diagnostics) || typeof report.number_of_files !== "number" || !Number.isInteger(report.number_of_files) || report.number_of_files <= 0) throw new Error("oxlint ratchet scan is invalid or empty");
   if (out.status === 1 && !report.diagnostics.length) throw new Error("oxlint failed without ratchet diagnostics");
   return report.diagnostics.length;
 }

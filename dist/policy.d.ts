@@ -5,7 +5,7 @@ export type PolicyGate = typeof POLICY_GATES[number];
 type DeepPartial<T> = T extends (infer U)[] ? U[] : T extends object ? {
     [K in keyof T]?: DeepPartial<T[K]>;
 } : T;
-export type PolicyParameters = DeepPartial<Omit<AbacusConfig, "check" | "policy">> & {
+export type PolicyParameters = DeepPartial<Omit<AbacusConfig, "check" | "policy" | "verification">> & {
     architecture?: {
         targets?: string[];
     };

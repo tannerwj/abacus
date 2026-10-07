@@ -10,3 +10,7 @@ export { comparePolicyRuns } from "./preview.js";
 export { runArchitecture } from "./architecture.js";
 export { runPackageValidation } from "./package-validation.js";
 export { typescriptEvidence, reportTypeScriptProfile } from "./typescript-profile.js";
+export { recordVerification, verificationEvidence } from "./verification.js";
+export { parseVerificationReport } from "./verification-reports.js";
+export { validateVerificationConfig } from "./verification-config.js";
+export { reportStandards } from "./standards.js";

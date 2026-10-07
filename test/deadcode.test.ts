@@ -1,3 +1,4 @@
+import { jsonObject } from "../src/json-values.js";
 import { describe, expect, test } from "vitest";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -49,7 +50,7 @@ describe("deadcode gate", () => {
   });
 
   test("knipConfig emits valid JSON with the research-backed defaults", () => {
-    const config = JSON.parse(knipConfig(fixtureDir)) as { entry: string[]; ignore: string[]; ignoreExportsUsedInFile: boolean };
+    const config = jsonObject(knipConfig(fixtureDir));
     expect(config.entry).toContain("src/index.ts");
     expect(config.ignoreExportsUsedInFile).toBe(true);
     expect(config.entry).toContain(".dependency-cruiser.{js,cjs,mjs}");

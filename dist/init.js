@@ -1,3 +1,4 @@
+import { jsonObject, objectValue, stringValue } from "./json-values.js";
 /**
  * `abacus init --preset <p>` — drop the config files into a repo and wire
  * package.json scripts. Never overwrites an existing file; prints what to do
@@ -48,16 +49,19 @@ export function init(preset, cwd = process.cwd(), options = {}) {
     writeIfMissing(path.join(cwd, ".jscpd.json"), fs.readFileSync(JSCPD_TEMPLATE, "utf8"));
     const pkgFile = path.join(cwd, "package.json");
     if (fs.existsSync(pkgFile)) {
-        const pkg = JSON.parse(fs.readFileSync(pkgFile, "utf8"));
-        pkg.scripts ??= {};
+        const pkg = jsonObject(fs.readFileSync(pkgFile, "utf8"));
+        const scripts = pkg.scripts === undefined ? {} : objectValue(pkg.scripts);
+        if (!Object.values(scripts).every((value) => typeof value === "string"))
+            throw new Error("Invalid package scripts");
+        pkg.scripts = scripts;
         const wanted = { lint: "oxlint --type-aware", fmt: "abacus fmt", abc: "abacus abc", size: "abacus size", ratchet: "abacus ratchet", tsc: "abacus tsc", deadcode: "abacus deadcode", secrets: "abacus secrets", cycles: "abacus cycles", dupes: "abacus dupes", todos: "abacus todos", check: "abacus check" };
         let changed = false;
         for (const [name, cmd] of Object.entries(wanted)) {
-            if (pkg.scripts[name]) {
-                console.log(`  keep  scripts.${name} = ${pkg.scripts[name]}`);
+            if (scripts[name]) {
+                console.log(`  keep  scripts.${name} = ${stringValue(scripts[name])}`);
                 continue;
             }
-            pkg.scripts[name] = cmd;
+            scripts[name] = cmd;
             changed = true;
             console.log(`  add   scripts.${name} = ${cmd}`);
         }

@@ -15,6 +15,7 @@ The version-1 contract records:
 - `pass`, `fail`, `waived`, `not-applicable`, `incomplete`, or `error`
 - Required applicability and independent `block` / `warn` / `observe` enforcement
 - Active and waived finding counts, declared scope, actual scanned count and unit
+- Independent coverage status/reasons when native findings and coverage differ
 - Source commit when Git exists, dirty state and source/build-input content digest
 - Policy pin/digest, effective Abacus configuration digest and native input hashes
 - Actual resolved analyzer versions/binary hashes and runtime identity
@@ -73,11 +74,18 @@ publication are rejected before invoking Wrangler.
 
 Compiler checks retain separate selected-project coverage, safe TS code/location diagnostics, and source/config/installed-declaration byte closures. Out-of-tree non-installed sources or extends inputs are incomplete. Incremental build info is directed to an isolated temporary location. A required zero-target result stays incomplete even when native diagnostics exist or an exact waiver matches. Missing/invalid ratchet baselines use fixed safe cause codes; arbitrary tool output is never echoed.
 
-## Cycle coverage boundary
+## Cycle coverage
 
-Current cycle checks warn when imports cannot be resolved and still report
-detected cycles. Standalone, aggregate, and JSON checks can pass with that
-warning, so a pass does not prove complete cycle coverage. Review the notes and
-fix module resolution before relying on the graph result. The opt-in architecture
-profile treats unresolved imports as incomplete. This distinction is important
-when interpreting a green report.
+Cycle checks preserve native outcomes and findings when imports cannot be
+resolved. Their independent `coverage.status` becomes `incomplete`; required
+coverage blocks even when the native outcome is `pass`, advisory or waived.
+Standalone checks exit 1 too. Fix module resolution before relying on the graph.
+
+## Behavioral evidence
+
+Configured [verification reports](verification.md) are evaluated alongside
+source checks and pinned policies. They retain execution/report provenance,
+actual cases or dependency inventory, skips, available retry/timeout counts,
+named assertions and measurement budgets. Required stale, invalid, missing or
+empty evidence blocks. Envelopes are unsigned, runner-supplied evidence; their
+hashes establish identity and integrity rather than truth or remote state.

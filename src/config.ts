@@ -1,3 +1,4 @@
+import { objectValue, enumValue } from "./json-values.js";
 /**
  * abacus.config.json — lives in the consuming repo so every budget and every
  * exemption is owned (and reviewed) there. Everything has a default; an empty
@@ -6,6 +7,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import type { PolicyPackReference, RepositoryException } from "./policy.js";
+import { validateVerificationConfig, type VerificationConfig } from "./verification-config.js";
 
 export type Preset = "typescript" | "cloudflare-worker" | "vite-spa" | "nextjs";
 
@@ -66,6 +68,7 @@ export interface AbacusConfig {
   ratchet: RatchetConfig;
   /** Optional immutable organization pack. Ordinary checks never update its pin. */
   policy?: { pack: PolicyPackReference; exceptions?: RepositoryException[] };
+  verification?: VerificationConfig;
 }
 
 export const CONFIG_FILE = "abacus.config.json";
@@ -77,13 +80,13 @@ export function defaults(preset: Preset): AbacusConfig {
     check: { gates: ["lint", "abc", "ratchet"] },
     roots: ["src", "scripts"],
     tsc: { projects: ["tsconfig.json"] },
-    exclude: ["\\.d\\.ts$", "\\.test\\.tsx?$", "/components/ui/"],
+    exclude: ["\\.d\\.ts$", "\\.test\\.tsx?$"],
     abc: { budget: 60, allow: {} },
     size: { budgets: [] },
-    ratchet: { file: "abacus.ratchet.json", metrics: { loc: { roots: ["src"], slack: 0.02 }, oxlintWarnings: true, abcMax: true, comments: { roots: ["src"], max: 0.3 } } }
+    ratchet: { file: "abacus.ratchet.json", metrics: { oxlintWarnings: true, abcMax: true } }
   };
   if (preset === "cloudflare-worker") base.size.worker = { max: 400 * KB };
-  if (preset === "nextjs") base.exclude.push("/components/ui/", "^\\.next/", "^\\.open-next/", "next-env\\.d\\.ts$");
+  if (preset === "nextjs") base.exclude.push("^\\.next/", "^\\.open-next/", "next-env\\.d\\.ts$");
   if (preset === "vite-spa" || preset === "cloudflare-worker") {
     base.size.budgets = [
       { label: "SPA JS (all chunks, gzip)", dir: "dist/client/assets", match: "\\.js$", max: 280 * KB },
@@ -94,26 +97,43 @@ export function defaults(preset: Preset): AbacusConfig {
   return base;
 }
 
+function existingDefaults(raw: Record<string, unknown>): AbacusConfig {
+  const base = defaults(enumValue(raw.preset ?? "typescript", ["typescript", "cloudflare-worker", "vite-spa", "nextjs"]));
+  const ratchet = raw.ratchet === undefined ? {} : objectValue(raw.ratchet);
+  if (ratchet.metrics === undefined) base.ratchet.metrics = { loc: { roots: ["src"], slack: 0.02 }, oxlintWarnings: true, abcMax: true, comments: { roots: ["src"], max: 0.3 } };
+  if (raw.exclude === undefined) base.exclude.push("/components/ui/");
+  return base;
+}
 export function loadConfig(cwd = process.cwd()): AbacusConfig {
   const file = path.join(cwd, CONFIG_FILE);
   if (!fs.existsSync(file)) return defaults("typescript");
-  const raw = JSON.parse(fs.readFileSync(file, "utf8")) as Partial<AbacusConfig> & { $schema?: string };
-  const base = defaults(raw.preset ?? "typescript");
-  const config: AbacusConfig = {
-    preset: raw.preset ?? base.preset,
-    check: loadCheck(raw.check, base.check),
-    roots: raw.roots ?? base.roots,
-    tsc: loadTsc(raw.tsc, base.tsc),
-    exclude: raw.exclude ?? base.exclude,
-    abc: { budget: raw.abc?.budget ?? base.abc.budget, allow: raw.abc?.allow ?? {} },
-    size: { budgets: raw.size?.budgets ?? base.size.budgets, worker: raw.size?.worker ?? base.size.worker },
-    ratchet: { file: raw.ratchet?.file ?? base.ratchet.file, metrics: raw.ratchet?.metrics ?? base.ratchet.metrics },
-    ...(raw.policy === undefined ? {} : { policy: raw.policy }),
-  };
+  const raw = objectValue(JSON.parse(fs.readFileSync(file, "utf8"))), base = existingDefaults(raw);
+  const config = structuredClone(base);
+  for (const key of ["preset", "roots", "exclude"]) if (raw[key] !== undefined) Reflect.set(config, key, raw[key]);
+  config.check = loadCheck(raw.check, base.check); config.tsc = loadTsc(raw.tsc, base.tsc);
+  for (const key of ["abc", "size", "ratchet"] as const) {
+    if (raw[key] !== undefined) Object.assign(config[key], objectValue(raw[key]));
+  }
+  if (raw.policy !== undefined) { assertPolicyConfig(raw.policy); config.policy = raw.policy; }
+  if (raw.verification !== undefined) config.verification = validateVerificationConfig(raw.verification);
   validateAbacusConfig(config);
   return config;
 }
 
+function assertPolicyConfig(value: unknown): asserts value is NonNullable<AbacusConfig["policy"]> {
+  const policy = objectValue(value), pack = objectValue(policy.pack);
+  nonempty(pack.version, "policy version"); nonempty(pack.digest, "policy digest");
+  const local = typeof pack.path === "string" && pack.package === undefined && pack.export === undefined;
+  const installed = typeof pack.package === "string" && typeof pack.export === "string" && pack.path === undefined;
+  if (!local && !installed) throw new Error("Invalid policy reference");
+  if (policy.exceptions !== undefined) {
+    if (!Array.isArray(policy.exceptions)) throw new Error("Invalid policy exceptions");
+    for (const entry of policy.exceptions) {
+      const exception = objectValue(entry);
+      for (const key of ["id", "ruleId", "subject", "owner", "reason", "expires"]) nonempty(exception[key], `exception.${key}`);
+    }
+  }
+}
 function nonempty(value: unknown, name: string): asserts value is string {
   if (typeof value !== "string" || !value.trim()) throw new Error(`${name} must be a nonempty string`);
 }
@@ -154,9 +174,18 @@ export function validateWranglerArgs(input: unknown): string[] {
   }
   return args;
 }
+function canonicalProjectPath(file: string): string {
+  if (fs.existsSync(file)) return fs.realpathSync(file);
+  const parent = path.dirname(file);
+  return parent === file ? file : path.join(canonicalProjectPath(parent), path.basename(file));
+}
 export function assertProjectPath(cwd: string, input: string, label: string): void {
-  const relative = path.relative(path.resolve(cwd), path.resolve(cwd, input));
-  if (relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) throw new Error(`${label} must stay within the evaluated project tree`);
+  const root = canonicalProjectPath(path.resolve(cwd)), absolute = path.resolve(cwd, input);
+  const mapped = absolute === path.resolve(cwd) ? root : path.join(canonicalProjectPath(path.dirname(absolute)), path.basename(absolute));
+  for (const target of [mapped, canonicalProjectPath(absolute)]) {
+    const relative = path.relative(root, target);
+    if (relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) throw new Error(`${label} must stay within the evaluated project tree`);
+  }
 }
 export function validateProjectInputs(config: AbacusConfig, cwd: string): void {
   for (const project of validateTscProjects(config.tsc.projects)) assertProjectPath(cwd, project, "TypeScript project");
@@ -168,6 +197,7 @@ export function validateProjectInputs(config: AbacusConfig, cwd: string): void {
 }
 /** Runtime validation matters: JSON values do not acquire TypeScript's guarantees. */
 export function validateAbacusConfig(config: AbacusConfig): void {
+  if (config.verification !== undefined) validateVerificationConfig(config.verification);
   if (!["typescript", "cloudflare-worker", "vite-spa", "nextjs"].includes(config.preset)) throw new Error("Invalid preset");
   validateCheckGates(config.check.gates);
   if (!config.tsc) throw new Error("tsc must specify a projects list");
@@ -196,8 +226,9 @@ function isCheckGate(gate: unknown): gate is CheckGate {
   return typeof gate === "string" && CHECK_GATES.some((known) => known === gate);
 }
 
-function loadCheck(raw: AbacusConfig["check"] | undefined, base: AbacusConfig["check"]): AbacusConfig["check"] {
-  return { gates: validateCheckGates(raw?.gates ?? base.gates) };
+function loadCheck(raw: unknown, base: AbacusConfig["check"]): AbacusConfig["check"] {
+  const value = raw === undefined ? {} : objectValue(raw);
+  return { gates: validateCheckGates(value.gates ?? base.gates) };
 }
 
 /** Local JSON project selectors only; executable arguments and reference builds are unsupported. */

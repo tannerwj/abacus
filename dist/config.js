@@ -1,3 +1,4 @@
+import { objectValue, enumValue } from "./json-values.js";
 /**
  * abacus.config.json — lives in the consuming repo so every budget and every
  * exemption is owned (and reviewed) there. Everything has a default; an empty
@@ -5,6 +6,7 @@
  */
 import fs from "node:fs";
 import path from "node:path";
+import { validateVerificationConfig } from "./verification-config.js";
 export const CHECK_GATES = ["lint", "abc", "ratchet", "tsc", "deadcode", "secrets", "cycles", "dupes", "todos", "size"];
 /** Source gates can run before a build. Size remains an explicit post-build gate. */
 export const SOURCE_GATES = CHECK_GATES.filter((gate) => gate !== "size");
@@ -16,15 +18,15 @@ export function defaults(preset) {
         check: { gates: ["lint", "abc", "ratchet"] },
         roots: ["src", "scripts"],
         tsc: { projects: ["tsconfig.json"] },
-        exclude: ["\\.d\\.ts$", "\\.test\\.tsx?$", "/components/ui/"],
+        exclude: ["\\.d\\.ts$", "\\.test\\.tsx?$"],
         abc: { budget: 60, allow: {} },
         size: { budgets: [] },
-        ratchet: { file: "abacus.ratchet.json", metrics: { loc: { roots: ["src"], slack: 0.02 }, oxlintWarnings: true, abcMax: true, comments: { roots: ["src"], max: 0.3 } } }
+        ratchet: { file: "abacus.ratchet.json", metrics: { oxlintWarnings: true, abcMax: true } }
     };
     if (preset === "cloudflare-worker")
         base.size.worker = { max: 400 * KB };
     if (preset === "nextjs")
-        base.exclude.push("/components/ui/", "^\\.next/", "^\\.open-next/", "next-env\\.d\\.ts$");
+        base.exclude.push("^\\.next/", "^\\.open-next/", "next-env\\.d\\.ts$");
     if (preset === "vite-spa" || preset === "cloudflare-worker") {
         base.size.budgets = [
             { label: "SPA JS (all chunks, gzip)", dir: "dist/client/assets", match: "\\.js$", max: 280 * KB },
@@ -34,25 +36,56 @@ export function defaults(preset) {
     }
     return base;
 }
+function existingDefaults(raw) {
+    const base = defaults(enumValue(raw.preset ?? "typescript", ["typescript", "cloudflare-worker", "vite-spa", "nextjs"]));
+    const ratchet = raw.ratchet === undefined ? {} : objectValue(raw.ratchet);
+    if (ratchet.metrics === undefined)
+        base.ratchet.metrics = { loc: { roots: ["src"], slack: 0.02 }, oxlintWarnings: true, abcMax: true, comments: { roots: ["src"], max: 0.3 } };
+    if (raw.exclude === undefined)
+        base.exclude.push("/components/ui/");
+    return base;
+}
 export function loadConfig(cwd = process.cwd()) {
     const file = path.join(cwd, CONFIG_FILE);
     if (!fs.existsSync(file))
         return defaults("typescript");
-    const raw = JSON.parse(fs.readFileSync(file, "utf8"));
-    const base = defaults(raw.preset ?? "typescript");
-    const config = {
-        preset: raw.preset ?? base.preset,
-        check: loadCheck(raw.check, base.check),
-        roots: raw.roots ?? base.roots,
-        tsc: loadTsc(raw.tsc, base.tsc),
-        exclude: raw.exclude ?? base.exclude,
-        abc: { budget: raw.abc?.budget ?? base.abc.budget, allow: raw.abc?.allow ?? {} },
-        size: { budgets: raw.size?.budgets ?? base.size.budgets, worker: raw.size?.worker ?? base.size.worker },
-        ratchet: { file: raw.ratchet?.file ?? base.ratchet.file, metrics: raw.ratchet?.metrics ?? base.ratchet.metrics },
-        ...(raw.policy === undefined ? {} : { policy: raw.policy }),
-    };
+    const raw = objectValue(JSON.parse(fs.readFileSync(file, "utf8"))), base = existingDefaults(raw);
+    const config = structuredClone(base);
+    for (const key of ["preset", "roots", "exclude"])
+        if (raw[key] !== undefined)
+            Reflect.set(config, key, raw[key]);
+    config.check = loadCheck(raw.check, base.check);
+    config.tsc = loadTsc(raw.tsc, base.tsc);
+    for (const key of ["abc", "size", "ratchet"]) {
+        if (raw[key] !== undefined)
+            Object.assign(config[key], objectValue(raw[key]));
+    }
+    if (raw.policy !== undefined) {
+        assertPolicyConfig(raw.policy);
+        config.policy = raw.policy;
+    }
+    if (raw.verification !== undefined)
+        config.verification = validateVerificationConfig(raw.verification);
     validateAbacusConfig(config);
     return config;
+}
+function assertPolicyConfig(value) {
+    const policy = objectValue(value), pack = objectValue(policy.pack);
+    nonempty(pack.version, "policy version");
+    nonempty(pack.digest, "policy digest");
+    const local = typeof pack.path === "string" && pack.package === undefined && pack.export === undefined;
+    const installed = typeof pack.package === "string" && typeof pack.export === "string" && pack.path === undefined;
+    if (!local && !installed)
+        throw new Error("Invalid policy reference");
+    if (policy.exceptions !== undefined) {
+        if (!Array.isArray(policy.exceptions))
+            throw new Error("Invalid policy exceptions");
+        for (const entry of policy.exceptions) {
+            const exception = objectValue(entry);
+            for (const key of ["id", "ruleId", "subject", "owner", "reason", "expires"])
+                nonempty(exception[key], `exception.${key}`);
+        }
+    }
 }
 function nonempty(value, name) {
     if (typeof value !== "string" || !value.trim())
@@ -106,10 +139,20 @@ export function validateWranglerArgs(input) {
     }
     return args;
 }
+function canonicalProjectPath(file) {
+    if (fs.existsSync(file))
+        return fs.realpathSync(file);
+    const parent = path.dirname(file);
+    return parent === file ? file : path.join(canonicalProjectPath(parent), path.basename(file));
+}
 export function assertProjectPath(cwd, input, label) {
-    const relative = path.relative(path.resolve(cwd), path.resolve(cwd, input));
-    if (relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative))
-        throw new Error(`${label} must stay within the evaluated project tree`);
+    const root = canonicalProjectPath(path.resolve(cwd)), absolute = path.resolve(cwd, input);
+    const mapped = absolute === path.resolve(cwd) ? root : path.join(canonicalProjectPath(path.dirname(absolute)), path.basename(absolute));
+    for (const target of [mapped, canonicalProjectPath(absolute)]) {
+        const relative = path.relative(root, target);
+        if (relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative))
+            throw new Error(`${label} must stay within the evaluated project tree`);
+    }
 }
 export function validateProjectInputs(config, cwd) {
     for (const project of validateTscProjects(config.tsc.projects))
@@ -126,6 +169,8 @@ export function validateProjectInputs(config, cwd) {
 }
 /** Runtime validation matters: JSON values do not acquire TypeScript's guarantees. */
 export function validateAbacusConfig(config) {
+    if (config.verification !== undefined)
+        validateVerificationConfig(config.verification);
     if (!["typescript", "cloudflare-worker", "vite-spa", "nextjs"].includes(config.preset))
         throw new Error("Invalid preset");
     validateCheckGates(config.check.gates);
@@ -169,7 +214,8 @@ function isCheckGate(gate) {
     return typeof gate === "string" && CHECK_GATES.some((known) => known === gate);
 }
 function loadCheck(raw, base) {
-    return { gates: validateCheckGates(raw?.gates ?? base.gates) };
+    const value = raw === undefined ? {} : objectValue(raw);
+    return { gates: validateCheckGates(value.gates ?? base.gates) };
 }
 /** Local JSON project selectors only; executable arguments and reference builds are unsupported. */
 export function validateTscProjects(input, label = "tsc.projects") {

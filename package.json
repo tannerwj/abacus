@@ -26,10 +26,12 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "test": "vitest run --maxWorkers=2 --minWorkers=1",
+    "test": "vitest run --maxWorkers=2",
     "check": "pnpm build && tsc -p tsconfig.json --noEmit && pnpm test && node dist/cli.js check",
     "check:all": "pnpm build && tsc -p tsconfig.json --noEmit && pnpm test && node dist/cli.js check --all",
-    "test:install": "node test/fresh-install.mjs"
+    "test:install": "node test/fresh-install.mjs",
+    "test:verification": "pnpm build && node test/verification-e2e.mjs && node test/standards-e2e.mjs",
+    "test:properties": "vitest run test/policy.test.ts test/preview.test.ts test/verification-reports.test.ts --maxWorkers=2 && node test/prove-properties.mjs"
   },
   "peerDependencies": {
     "oxfmt": ">=0.60.0",
@@ -45,11 +47,13 @@
     }
   },
   "devDependencies": {
+    "@hegeldev/hegel": "0.4.7",
+    "@playwright/test": "1.64.0",
     "@types/node": "^22.10.2",
     "oxfmt": "0.67.0",
     "oxlint": "^1.82.0",
     "oxlint-tsgolint": "^7.0.2001",
-    "vitest": "^2.1.8"
+    "vitest": "4.1.11"
   },
   "dependencies": {
     "@arethetypeswrong/cli": "^0.18.5",

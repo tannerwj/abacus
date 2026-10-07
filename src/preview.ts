@@ -109,7 +109,7 @@ function assertPackMetadata(run: RunEvidence, pack?: PolicyPack): void {
   validatePolicyPack(pack);
   if (run.policy.name !== pack.name || run.policy.version !== pack.version) throw new Error("preview policy metadata does not match the supplied pack");
   const ids = [...indexed(pack.checks, "pack check").keys()].sort();
-  if (canonicalPolicyJson(ids) !== canonicalPolicyJson(run.checks.filter((check) => !(check.gate === "policy" && ["policy-compatibility", "source-stability", "policy-exceptions", "policy-stability"].includes(check.id))).map((check) => check.id).sort())) throw new Error("preview evidence checks do not match the supplied policy pack");
+  if (canonicalPolicyJson(ids) !== canonicalPolicyJson(run.checks.filter((check) => check.gate !== "verification" && !(check.gate === "policy" && ["policy-compatibility", "source-stability", "policy-exceptions", "policy-stability"].includes(check.id))).map((check) => check.id).sort())) throw new Error("preview evidence checks do not match the supplied policy pack");
 }
 function affectedExceptions(before: PreviewFinding[], after: PreviewFinding[], exceptions: RepositoryException[], changedRules: PreviewChange[], evaluatedAt: string): PolicyPreview["affectedExceptions"] {
   const changed = new Set(changedRules.map((change) => change.id)); const date = evaluationDate(evaluatedAt);

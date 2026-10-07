@@ -1,4 +1,5 @@
 import type { PolicyPackReference, RepositoryException } from "./policy.js";
+import { type VerificationConfig } from "./verification-config.js";
 export type Preset = "typescript" | "cloudflare-worker" | "vite-spa" | "nextjs";
 export declare const CHECK_GATES: readonly ["lint", "abc", "ratchet", "tsc", "deadcode", "secrets", "cycles", "dupes", "todos", "size"];
 export type CheckGate = typeof CHECK_GATES[number];
@@ -73,6 +74,7 @@ export interface AbacusConfig {
         pack: PolicyPackReference;
         exceptions?: RepositoryException[];
     };
+    verification?: VerificationConfig;
 }
 export declare const CONFIG_FILE = "abacus.config.json";
 export declare function defaults(preset: Preset): AbacusConfig;
