@@ -43,7 +43,15 @@ Keep fixture path and exact value conditions joined with `AND`.
 ## What these hashes do and do not prove
 
 The tree digest includes source, tests, repository configuration and existing
-built inputs; excludes `.git` and `node_modules`; hashes in-tree file symlink targets and rejects out-of-tree or directory symlinks. Policy digests cover the declared native-config closure.
+built inputs; excludes `.git` and `node_modules`; hashes in-tree file symlink targets and rejects out-of-tree or directory symlinks.
+A repository can also leave tool state out with `provenance.exclude` in
+`abacus.config.json`: regex strings over project-relative paths, where
+directories end in `/` (for example `"^\\.wrangler/"` for a local Wrangler dev
+server's database, which changes whenever the server handles a request and
+would otherwise mark every check run during development `source-stability:
+incomplete`). Only list state a tool writes on its own, never source or
+build output a gate reads; `check`, `verify` and `standards` all apply it, so
+their digests stay comparable. Policy digests cover the declared native-config closure.
 The lockfile and package metadata participate in the tree digest; resolved
 analyzer versions/binary hashes are also recorded. This is a reviewable evidence
 manifest, not a hermetic sandbox or signed software-supply-chain attestation.

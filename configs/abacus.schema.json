@@ -214,6 +214,18 @@
         }
       }
     },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["exclude"],
+      "properties": {
+        "exclude": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Regex strings for project-relative paths (directories end in /) left out of the source digest: tool state that changes while checks run, such as a local dev server's database. Never source."
+        }
+      }
+    },
     "verification": {
       "type": "object",
       "additionalProperties": false,

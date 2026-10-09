@@ -68,14 +68,14 @@ function sameExecutable(file, hash) {
         return false;
     }
 }
-export function recordVerification(options, cwd = process.cwd()) {
+export function recordVerification(options, cwd = process.cwd(), provenanceExclude = []) {
     const timeout = validateInvocation(options);
     const reportPath = externalPath(cwd, options.report), evidencePath = externalPath(cwd, options.evidence);
     fresh(reportPath);
     fresh(evidencePath);
     if (reportPath === evidencePath)
         throw new Error("Report and evidence need distinct paths");
-    const bin = executable(options.command[0], cwd), binaryDigest = digest(fs.readFileSync(bin)), source = sourceProvenance(cwd);
+    const bin = executable(options.command[0], cwd), binaryDigest = digest(fs.readFileSync(bin)), source = sourceProvenance(cwd, provenanceExclude);
     const started = Date.now(), startedAt = new Date(started).toISOString();
     const executed = spawnSync(bin, options.command.slice(1), {
         cwd,
@@ -108,7 +108,7 @@ export function recordVerification(options, cwd = process.cwd()) {
             : "execution-error");
     if (!sameExecutable(bin, binaryDigest))
         record.issues.push("execution-error");
-    if (!sameSource(source, sourceProvenance(cwd)))
+    if (!sameSource(source, sourceProvenance(cwd, provenanceExclude)))
         record.issues.push("source-changed");
     try {
         const report = safeRead(reportPath);

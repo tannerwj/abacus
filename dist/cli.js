@@ -102,7 +102,7 @@ const COMMANDS = {
         const record = recordVerification({ id: option("--id"), profile: enumValue(option("--profile"), ["behavior", "authorization", "resilience", "performance", "dependencies"]), format: enumValue(option("--format"), ["vitest", "playwright", "contract", "pnpm-audit"]),
             report: option("--report"), evidence: option("--evidence"), command: rest.slice(separator + 1),
             environment: rest.slice(0, separator).includes("--environment") ? enumValue(option("--environment"), ["isolated", "staging"]) : undefined,
-            timeoutMs: rest.slice(0, separator).includes("--timeout") ? Number(option("--timeout")) : undefined });
+            timeoutMs: rest.slice(0, separator).includes("--timeout") ? Number(option("--timeout")) : undefined }, process.cwd(), loadConfig().provenance?.exclude);
         console.log(`Verification ${record.id}: ${record.summary.total} targets; ${record.summary.failed} failures; ${record.summary.skipped} skipped; ${record.summary.flaky} flaky; ${record.summary.timedOut} timeout attempts`);
         for (const issue of record.issues)
             console.log(`  ${issue}`);
@@ -115,7 +115,7 @@ const COMMANDS = {
         const enforcement = flag("--fail-on") ?? "none";
         if (!["any", "weakening", "none"].includes(enforcement))
             throw new Error("standards --fail-on must be any, weakening, or none");
-        const report = reportStandards(base);
+        const report = reportStandards(base, process.cwd(), loadConfig().provenance?.exclude);
         if (rest.includes("--json"))
             console.log(JSON.stringify(report, null, 2));
         else {

@@ -18,4 +18,4 @@ export interface StandardsReport {
     clean: boolean;
     limitations: string[];
 }
-export declare function reportStandards(base: string, cwd?: string): StandardsReport;
+export declare function reportStandards(base: string, cwd?: string, provenanceExclude?: string[]): StandardsReport;

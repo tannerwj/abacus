@@ -69,6 +69,8 @@ export interface AbacusConfig {
   /** Optional immutable organization pack. Ordinary checks never update its pin. */
   policy?: { pack: PolicyPackReference; exceptions?: RepositoryException[] };
   verification?: VerificationConfig;
+  /** Regex strings (project-relative, `/`-separated; directories end in `/`) for paths left out of the source digest: tool state that changes while checks run, never source. */
+  provenance?: { exclude: string[] };
 }
 
 export const CONFIG_FILE = "abacus.config.json";
@@ -116,6 +118,11 @@ export function loadConfig(cwd = process.cwd()): AbacusConfig {
   }
   if (raw.policy !== undefined) { assertPolicyConfig(raw.policy); config.policy = raw.policy; }
   if (raw.verification !== undefined) config.verification = validateVerificationConfig(raw.verification);
+  if (raw.provenance !== undefined) {
+    const exclude = objectValue(raw.provenance, "provenance must be an object").exclude;
+    stringList(exclude, "provenance.exclude");
+    config.provenance = { exclude };
+  }
   validateAbacusConfig(config);
   return config;
 }
@@ -204,6 +211,10 @@ export function validateAbacusConfig(config: AbacusConfig): void {
   loadTsc(config.tsc, defaults(config.preset).tsc);
   stringList(config.roots, "roots"); stringList(config.exclude, "exclude");
   for (const expression of config.exclude) RegExp(expression, "u");
+  if (config.provenance !== undefined) {
+    stringList(objectValue(config.provenance, "provenance must be an object").exclude, "provenance.exclude");
+    for (const expression of config.provenance.exclude) RegExp(expression, "u");
+  }
   finite(config.abc.budget, "abc.budget", 1);
   if (!config.abc.allow || typeof config.abc.allow !== "object" || Array.isArray(config.abc.allow)) throw new Error("Invalid abc.allow");
   for (const [subject, entry] of Object.entries(config.abc.allow)) { nonempty(subject, "abc.allow subject"); finite(entry.max, "abc.allow.max", 1); nonempty(entry.why, "abc.allow.why"); }

@@ -246,18 +246,18 @@ function baselineFiles(snapshot) {
         return [path.posix.normalize(path.posix.join(path.posix.dirname(file), ratchet))];
     });
 }
-export function reportStandards(base, cwd = process.cwd()) {
+export function reportStandards(base, cwd = process.cwd(), provenanceExclude = []) {
     if (!base || base.startsWith("-") || base.includes("\0"))
         throw new Error("Standards require an explicit Git base revision");
     if (fs.realpathSync(git(cwd, ["rev-parse", "--show-toplevel"]).trim()) !== fs.realpathSync(cwd))
         throw new Error("Run standards at the Git repository root");
     const commit = git(cwd, ["rev-parse", "--verify", "--end-of-options", `${base}^{commit}`]).trim();
-    const source = sourceProvenance(cwd), before = inventory(cwd, commit), after = inventory(cwd);
+    const source = sourceProvenance(cwd, provenanceExclude), before = inventory(cwd, commit), after = inventory(cwd);
     const baselines = new Set([...baselineFiles(before), ...baselineFiles(after)]);
     const changes = [...new Set([...before.keys(), ...after.keys()])]
         .sort()
         .flatMap((file) => fileChanges(file, before.get(file), after.get(file), baselines.has(file)));
-    if (source.treeDigest !== sourceProvenance(cwd).treeDigest)
+    if (source.treeDigest !== sourceProvenance(cwd, provenanceExclude).treeDigest)
         throw new Error("Standards inputs changed during comparison");
     return {
         schemaVersion: 1,

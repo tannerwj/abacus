@@ -75,6 +75,10 @@ export interface AbacusConfig {
         exceptions?: RepositoryException[];
     };
     verification?: VerificationConfig;
+    /** Regex strings (project-relative, `/`-separated; directories end in `/`) for paths left out of the source digest: tool state that changes while checks run, never source. */
+    provenance?: {
+        exclude: string[];
+    };
 }
 export declare const CONFIG_FILE = "abacus.config.json";
 export declare function defaults(preset: Preset): AbacusConfig;

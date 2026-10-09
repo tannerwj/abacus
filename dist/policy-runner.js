@@ -78,7 +78,7 @@ export function evaluatePolicy(config, cwd = process.cwd(), options = {}) {
     if (!Number.isFinite(Date.parse(evaluatedAt)))
         throw new Error("Invalid evaluation timestamp");
     const version = manifest().version;
-    const source = sourceProvenance(cwd);
+    const source = sourceProvenance(cwd, config.provenance?.exclude);
     const policy = options.policy ?? (config.policy ? resolvePolicyPack(config.policy.pack, cwd) : undefined);
     const exceptions = validateExceptions(config.policy?.exceptions ?? []);
     const expired = expiredExceptions(exceptions, evaluatedAt);
@@ -121,7 +121,7 @@ export function evaluatePolicy(config, cwd = process.cwd(), options = {}) {
     catch {
         checks.push(metadataError("policy-compatibility", "error", "Policy requires incompatible or unreported tool versions. Inspect policy compatibility and recorded tool metadata."));
     }
-    const after = sourceProvenance(cwd);
+    const after = sourceProvenance(cwd, config.provenance?.exclude);
     if (source.commit !== after.commit || source.treeDigest !== after.treeDigest) {
         checks.push(metadataError("source-stability", "incomplete", "Source or built inputs changed during evaluation"));
     }

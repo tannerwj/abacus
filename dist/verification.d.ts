@@ -13,5 +13,5 @@ export interface RecordVerificationOptions {
     environment?: "isolated" | "staging";
     timeoutMs?: number;
 }
-export declare function recordVerification(options: RecordVerificationOptions, cwd?: string): VerificationRecord;
+export declare function recordVerification(options: RecordVerificationOptions, cwd?: string, provenanceExclude?: string[]): VerificationRecord;
 export declare function verificationEvidence(spec: VerificationSpec, cwd: string, source: RunEvidence["source"], evaluatedAt: string): AdapterResult;

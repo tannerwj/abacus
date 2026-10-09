@@ -103,6 +103,7 @@ function sameExecutable(file: string, hash: string): boolean {
 export function recordVerification(
   options: RecordVerificationOptions,
   cwd = process.cwd(),
+  provenanceExclude: string[] = [],
 ): VerificationRecord {
   const timeout = validateInvocation(options);
   const reportPath = externalPath(cwd, options.report),
@@ -112,7 +113,7 @@ export function recordVerification(
   if (reportPath === evidencePath) throw new Error("Report and evidence need distinct paths");
   const bin = executable(options.command[0], cwd),
     binaryDigest = digest(fs.readFileSync(bin)),
-    source = sourceProvenance(cwd);
+    source = sourceProvenance(cwd, provenanceExclude);
   const started = Date.now(),
     startedAt = new Date(started).toISOString();
   const executed = spawnSync(bin, options.command.slice(1), {
@@ -147,7 +148,7 @@ export function recordVerification(
         : "execution-error",
     );
   if (!sameExecutable(bin, binaryDigest)) record.issues.push("execution-error");
-  if (!sameSource(source, sourceProvenance(cwd))) record.issues.push("source-changed");
+  if (!sameSource(source, sourceProvenance(cwd, provenanceExclude))) record.issues.push("source-changed");
   try {
     const report = safeRead(reportPath);
     record.summary = parseVerificationReport(options.format, report.value);

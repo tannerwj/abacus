@@ -52,6 +52,46 @@ describe("trustworthy evidence", () => {
     expect(run.checks.at(-1)).toMatchObject({ id: "source-stability", outcome: "incomplete", blocking: true });
   });
 
+  test("tool state the repository excludes can change during a run", () => {
+    const value = config(); value.provenance = { exclude: ["^\\.wrangler/"] };
+    fs.mkdirSync(path.join(cwd, ".wrangler/state"), { recursive: true });
+    fs.writeFileSync(path.join(cwd, ".wrangler/state/db.sqlite"), "before");
+    const run = evaluatePolicy(value, cwd, { evaluatedAt: at, adapter: () => {
+      fs.writeFileSync(path.join(cwd, ".wrangler/state/db.sqlite"), "after");
+      fs.writeFileSync(path.join(cwd, ".wrangler/state/new.sqlite-wal"), "wal"); return cleanResult();
+    } });
+    expect(run.checks.some((item) => item.id === "source-stability")).toBe(false);
+    expect(run.clean).toBe(true);
+  });
+
+  test("excluding tool state never hides source changes", () => {
+    const value = config(); value.provenance = { exclude: ["^\\.wrangler/"] };
+    const run = evaluatePolicy(value, cwd, { evaluatedAt: at, adapter: () => {
+      fs.writeFileSync(path.join(cwd, "src/index.ts"), 'export const changed = true;\n'); return cleanResult();
+    } });
+    expect(run.checks.at(-1)).toMatchObject({ id: "source-stability", outcome: "incomplete", blocking: true });
+  });
+
+  test("a provenance exclude matching nothing leaves the digest unchanged", () => {
+    const value = config(); value.provenance = { exclude: ["^\\.wrangler/"] };
+    const plain = evaluatePolicy(config(), cwd, { evaluatedAt: at, adapter: cleanResult });
+    const excluded = evaluatePolicy(value, cwd, { evaluatedAt: at, adapter: cleanResult });
+    expect(excluded.source.treeDigest).toBe(plain.source.treeDigest);
+  });
+
+  test("provenance excludes must be valid regex strings", () => {
+    const cases: [unknown, RegExp][] = [
+      [{ exclude: ["("] }, /Invalid regular expression/u],
+      [{ exclude: "^\\.wrangler/" }, /provenance\.exclude must be a list/u],
+      [{ exclude: [1] }, /provenance\.exclude must be a list/u],
+      [[], /provenance must be an object/u],
+    ];
+    for (const [provenance, message] of cases) {
+      fs.writeFileSync(path.join(cwd, "abacus.config.json"), JSON.stringify({ preset: "typescript", provenance }));
+      expect(() => loadConfig(cwd)).toThrow(message);
+    }
+  });
+
   test("normal checks never create a ratchet baseline", () => {
     const value = config(); value.check.gates = ["ratchet"];
     const run = evaluatePolicy(value, cwd, { evaluatedAt: at });

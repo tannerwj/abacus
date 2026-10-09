@@ -4,13 +4,22 @@ import path from "node:path";
 import { digest } from "./evidence.js";
 import { assertProjectPath } from "./config.js";
 const IGNORED = new Set([".git", "node_modules"]);
-function inputs(root, dir = root) {
+/**
+ * Every file under the project except `.git`, `node_modules` and paths the
+ * repository excludes (`provenance.exclude`: tool state such as a local dev
+ * server's database, which changes while checks run). Directories are tested
+ * with a trailing slash, so `^\\.wrangler/` skips the whole tree.
+ */
+function inputs(root, skip, dir = root) {
     return fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
         if (IGNORED.has(entry.name))
             return [];
         const file = path.join(dir, entry.name);
+        const relative = path.relative(root, file).replaceAll(path.sep, "/");
         if (entry.isDirectory())
-            return inputs(root, file);
+            return skip.some((re) => re.test(relative + "/")) ? [] : inputs(root, skip, file);
+        if (skip.some((re) => re.test(relative)))
+            return [];
         if (entry.isSymbolicLink()) {
             assertProjectPath(root, fs.realpathSync(file), "Input symlink target");
             if (!fs.statSync(file).isFile())
@@ -20,8 +29,8 @@ function inputs(root, dir = root) {
         return entry.isFile() ? [path.relative(root, file)] : [];
     }).sort();
 }
-export function sourceProvenance(cwd) {
-    const files = inputs(cwd);
+export function sourceProvenance(cwd, exclude = []) {
+    const files = inputs(cwd, exclude.map((expression) => new RegExp(expression, "u")));
     const manifest = files.map((file) => {
         const full = path.join(cwd, file);
         return [file.replaceAll(path.sep, "/"), digest(fs.readFileSync(full)), fs.lstatSync(full).isSymbolicLink() ? fs.readlinkSync(full) : null];

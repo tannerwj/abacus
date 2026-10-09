@@ -66,6 +66,11 @@ export function loadConfig(cwd = process.cwd()) {
     }
     if (raw.verification !== undefined)
         config.verification = validateVerificationConfig(raw.verification);
+    if (raw.provenance !== undefined) {
+        const exclude = objectValue(raw.provenance, "provenance must be an object").exclude;
+        stringList(exclude, "provenance.exclude");
+        config.provenance = { exclude };
+    }
     validateAbacusConfig(config);
     return config;
 }
@@ -181,6 +186,11 @@ export function validateAbacusConfig(config) {
     stringList(config.exclude, "exclude");
     for (const expression of config.exclude)
         RegExp(expression, "u");
+    if (config.provenance !== undefined) {
+        stringList(objectValue(config.provenance, "provenance must be an object").exclude, "provenance.exclude");
+        for (const expression of config.provenance.exclude)
+            RegExp(expression, "u");
+    }
     finite(config.abc.budget, "abc.budget", 1);
     if (!config.abc.allow || typeof config.abc.allow !== "object" || Array.isArray(config.abc.allow))
         throw new Error("Invalid abc.allow");
