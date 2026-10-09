@@ -115,7 +115,7 @@ const COMMANDS = {
         const enforcement = flag("--fail-on") ?? "none";
         if (!["any", "weakening", "none"].includes(enforcement))
             throw new Error("standards --fail-on must be any, weakening, or none");
-        const report = reportStandards(base, process.cwd(), loadConfig().provenance?.exclude);
+        const report = reportStandards(base);
         if (rest.includes("--json"))
             console.log(JSON.stringify(report, null, 2));
         else {
