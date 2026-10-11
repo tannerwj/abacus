@@ -1,0 +1,57 @@
+name: Lean native verification
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/lean-native.yml
+      - src/**
+      - configs/lean/**
+      - test/fixtures/lean/**
+      - test/lean-native-e2e.mjs
+      - package.json
+      - pnpm-lock.yaml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lean-native-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lean-native:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Install distro sandbox tool and verify default isolation
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends bubblewrap
+          /usr/bin/bwrap --version
+          /usr/bin/bwrap --unshare-all --die-with-parent --new-session --clearenv \
+            --ro-bind /usr /usr --ro-bind /lib /lib --ro-bind /lib64 /lib64 \
+            --proc /proc --dev /dev --tmpfs /tmp -- /usr/bin/true
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413
+        with:
+          version: 11.19.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: "24"
+          cache: pnpm
+      - name: Install checksum-pinned official Lean distribution
+        run: |
+          archive="$RUNNER_TEMP/lean-4.34.1-linux.tar.zst"
+          curl --fail --location --proto '=https' --tlsv1.2 --retry 3 --max-time 300 \
+            https://github.com/leanprover/lean4/releases/download/v4.34.1/lean-4.34.1-linux.tar.zst \
+            --output "$archive"
+          printf '%s  %s\n' 47bf4bbd78f70c2e9670598ab7124d92b6efb7330ff33e5fbb4030f6fd72e4e4 "$archive" | sha256sum --check --strict
+          tar --zstd --extract --file "$archive" --directory "$RUNNER_TEMP"
+          "$RUNNER_TEMP/lean-4.34.1-linux/bin/lean" --version
+      - run: pnpm install --frozen-lockfile
+      - name: Full isolated Lean positive and negative CLI suite
+        run: ABACUS_LEAN_TOOLCHAIN="$RUNNER_TEMP/lean-4.34.1-linux" timeout --signal=TERM --kill-after=30s 25m pnpm test:lean-native
+      - run: git diff --exit-code -- dist

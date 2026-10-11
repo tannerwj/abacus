@@ -1,3 +1,4 @@
+import { validateLeanConfig, type LeanConfig } from "./lean-config.js";
 import {
   REPORT_FORMATS,
   reportArray,
@@ -14,6 +15,7 @@ export const VERIFICATION_PROFILES = [
   "resilience",
   "performance",
   "dependencies",
+  "formal",
 ] as const;
 export type VerificationProfile = (typeof VERIFICATION_PROFILES)[number];
 export interface VerificationBudget {
@@ -35,6 +37,7 @@ export interface VerificationSpec {
   environment?: "isolated" | "staging";
   assertions?: string[];
   budgets?: VerificationBudget[];
+  lean?: LeanConfig;
 }
 export interface VerificationConfig {
   reports: VerificationSpec[];
@@ -97,6 +100,13 @@ function validateLimits(item: Record<string, unknown>): void {
     if (item[key] !== undefined && !Number.isSafeInteger(item[key]))
       throw new Error("Verification count limits must be integers");
 }
+function formalRequirements(item: Record<string, unknown>, assertions: string[], budgets: VerificationBudget[]): void {
+  if (item.format === "lean" || item.profile === "formal" || item.lean !== undefined) {
+    if (item.format !== "lean" || item.profile !== "formal" || item.environment !== "isolated" || assertions.length || budgets.length)
+      throw new Error("Formal verification requires isolated Lean evidence and registered targets");
+    validateLeanConfig(item.lean);
+  }
+}
 function assertSpec(value: unknown): asserts value is VerificationSpec {
   const item = reportObject(value);
   const allowed = new Set([
@@ -112,6 +122,7 @@ function assertSpec(value: unknown): asserts value is VerificationSpec {
     "environment",
     "assertions",
     "budgets",
+    "lean",
   ]);
   if (Object.keys(item).some((key) => !allowed.has(key)))
     throw new Error("Unsupported verification report field");
@@ -145,6 +156,7 @@ function assertSpec(value: unknown): asserts value is VerificationSpec {
     "budgets",
   );
   profileRequirements(item, assertions, budgets);
+  formalRequirements(item, assertions, budgets);
 }
 export function validateVerificationConfig(value: unknown): VerificationConfig {
   const raw = reportObject(value);

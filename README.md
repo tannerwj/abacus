@@ -111,6 +111,13 @@ and report unresolved imports as incomplete coverage. Required graph coverage
 blocks independently of whether a cycle was found or waived. See
 [cycle checks](docs/gates.md#circular-dependencies) and [evidence boundaries](docs/evidence.md).
 
+## Formal models (opt-in)
+
+[Lean verification](docs/lean-verification.md) registers expected theorem types,
+rebuilds and rechecks them with pinned Lean tooling, audits transitive axioms,
+and imports source-bound evidence through the existing verification gate.
+It verifies the formal model, not the whole TypeScript implementation.
+
 ## Community
 
 Bug reports, practical examples, clearer docs, and small fixes are welcome.
