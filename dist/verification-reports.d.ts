@@ -1,4 +1,4 @@
-export declare const REPORT_FORMATS: readonly ["vitest", "playwright", "contract", "pnpm-audit"];
+export declare const REPORT_FORMATS: readonly ["vitest", "playwright", "contract", "pnpm-audit", "lean"];
 export type ReportFormat = (typeof REPORT_FORMATS)[number];
 export type CaseStatus = "passed" | "failed" | "skipped";
 export interface Measurement {

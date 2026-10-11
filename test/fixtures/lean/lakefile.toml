@@ -1,0 +1,26 @@
+name = "AbacusLeanFixtures"
+version = "0.1.0"
+
+[[lean_lib]]
+name = "Good"
+
+[[lean_lib]]
+name = "Sorry"
+
+[[lean_lib]]
+name = "Custom"
+
+[[lean_lib]]
+name = "Native"
+
+[[lean_lib]]
+name = "Broken"
+
+[[lean_lib]]
+name = "Unchecked"
+
+[[lean_lib]]
+name = "Changed"
+
+[[lean_lib]]
+name = "Classical"

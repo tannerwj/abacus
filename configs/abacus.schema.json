@@ -240,14 +240,101 @@
             "properties": {
               "id": { "type": "string", "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._/-]{0,159}$" },
               "path": { "type": "string", "minLength": 1 },
-              "format": { "enum": ["vitest", "playwright", "contract", "pnpm-audit"] },
-              "profile": { "enum": ["behavior", "authorization", "resilience", "performance", "dependencies"] },
+              "format": { "enum": ["vitest", "playwright", "contract", "pnpm-audit", "lean"] },
+              "profile": { "enum": ["behavior", "authorization", "resilience", "performance", "dependencies", "formal"] },
               "required": { "type": "boolean" },
               "enforcement": { "enum": ["block", "warn", "observe"] },
               "environment": { "enum": ["isolated", "staging"] },
               "maxAgeHours": { "type": "number", "exclusiveMinimum": 0, "default": 24 },
               "maxSkipped": { "type": "integer", "minimum": 0, "default": 0 },
               "maxFlaky": { "type": "integer", "minimum": 0, "default": 0 },
+              "lean": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "project",
+                  "specifications",
+                  "toolchain",
+                  "toolchainDigest",
+                  "tools",
+                  "targets"
+                ],
+                "properties": {
+                  "project": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "specifications": {
+                    "type": "array",
+                    "minItems": 1,
+                    "uniqueItems": true,
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "toolchain": {
+                    "const": "leanprover/lean4:v4.34.1"
+                  },
+                  "toolchainDigest": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{64}$"
+                  },
+                  "tools": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "lean",
+                      "lake",
+                      "leanchecker"
+                    ],
+                    "properties": {
+                      "lean": {
+                        "type": "string",
+                        "pattern": "^[a-f0-9]{64}$"
+                      },
+                      "lake": {
+                        "type": "string",
+                        "pattern": "^[a-f0-9]{64}$"
+                      },
+                      "leanchecker": {
+                        "type": "string",
+                        "pattern": "^[a-f0-9]{64}$"
+                      }
+                    }
+                  },
+                  "targets": {
+                    "type": "array",
+                    "minItems": 1,
+                    "uniqueItems": true,
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "module",
+                        "name",
+                        "typeDigest"
+                      ],
+                      "properties": {
+                        "module": {
+                          "type": "string",
+                          "pattern": "^[A-Za-z][A-Za-z0-9_]*(?:\\.[A-Za-z][A-Za-z0-9_]*)*$",
+                          "maxLength": 160
+                        },
+                        "name": {
+                          "type": "string",
+                          "pattern": "^[A-Za-z][A-Za-z0-9_]*(?:\\.[A-Za-z][A-Za-z0-9_]*)*$",
+                          "maxLength": 160
+                        },
+                        "typeDigest": {
+                          "type": "string",
+                          "pattern": "^[a-f0-9]{64}$"
+                        }
+                      }
+                    }
+                  }
+                }
+              },
               "assertions": { "type": "array", "uniqueItems": true, "items": { "type": "string", "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._/-]{0,159}$" } },
               "budgets": {
                 "type": "array",
@@ -267,7 +354,8 @@
               { "if": { "properties": { "profile": { "enum": ["authorization", "resilience"] } } }, "then": { "required": ["assertions", "environment"], "properties": { "format": { "const": "contract" }, "assertions": { "minItems": 1 } } } },
               { "if": { "properties": { "profile": { "const": "performance" } } }, "then": { "required": ["budgets", "environment"], "properties": { "format": { "const": "contract" }, "budgets": { "minItems": 1 } } } },
               { "if": { "properties": { "profile": { "const": "dependencies" } } }, "then": { "properties": { "format": { "const": "pnpm-audit" } } } },
-              { "if": { "properties": { "format": { "const": "pnpm-audit" } } }, "then": { "properties": { "profile": { "const": "dependencies" } } } }
+              { "if": { "properties": { "format": { "const": "pnpm-audit" } } }, "then": { "properties": { "profile": { "const": "dependencies" } } } },
+              {"if": {"anyOf": [{"properties": {"format": {"const": "lean"}}}, {"properties": {"profile": {"const": "formal"}}}, {"required": ["lean"]}]}, "then": {"required": ["lean", "environment"], "properties": {"format": {"const": "lean"}, "profile": {"const": "formal"}, "environment": {"const": "isolated"}, "assertions": {"maxItems": 0}, "budgets": {"maxItems": 0}}}}
             ]
           }
         }

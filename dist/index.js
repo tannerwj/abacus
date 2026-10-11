@@ -14,3 +14,6 @@ export { recordVerification, verificationEvidence } from "./verification.js";
 export { parseVerificationReport } from "./verification-reports.js";
 export { validateVerificationConfig } from "./verification-config.js";
 export { reportStandards } from "./standards.js";
+export { validateLeanConfig, leanConfigurationDigest, LEAN_TOOLCHAIN } from "./lean-config.js";
+export { parseLeanReport, validateLeanEvidence } from "./lean-report.js";
+export { runLeanVerification, digestToolchain } from "./lean-runner.js";

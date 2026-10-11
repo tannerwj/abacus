@@ -1,6 +1,7 @@
+import { type LeanConfig } from "./lean-config.js";
 import { type ReportFormat, type Measurement } from "./verification-reports.js";
 import type { Enforcement } from "./evidence.js";
-export declare const VERIFICATION_PROFILES: readonly ["behavior", "authorization", "resilience", "performance", "dependencies"];
+export declare const VERIFICATION_PROFILES: readonly ["behavior", "authorization", "resilience", "performance", "dependencies", "formal"];
 export type VerificationProfile = (typeof VERIFICATION_PROFILES)[number];
 export interface VerificationBudget {
     id: string;
@@ -21,6 +22,7 @@ export interface VerificationSpec {
     environment?: "isolated" | "staging";
     assertions?: string[];
     budgets?: VerificationBudget[];
+    lean?: LeanConfig;
 }
 export interface VerificationConfig {
     reports: VerificationSpec[];

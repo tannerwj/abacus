@@ -75,7 +75,7 @@ function provenance(raw: Record<string, unknown>): void {
   if (raw.report !== undefined) {
     const report = reportObject(raw.report);
     text(report.path);
-    enumValue(report.format, ["vitest", "playwright", "pnpm-audit", "contract"]);
+    enumValue(report.format, ["vitest", "playwright", "pnpm-audit", "contract", "lean"]);
     hash(report.digest);
   }
 }

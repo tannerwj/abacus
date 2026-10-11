@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { runLeanVerification } from "./lean-runner.js";
 import { jsonObject, enumValue } from "./json-values.js";
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
@@ -40,6 +41,7 @@ const HELP = `abacus — quality gates for TypeScript projects
   abacus policy-digest --path PACK.json                                 digest a local policy pack and its declared native configs
   abacus preview --from OLD-PIN.json --to NEW-PIN.json [--json]           evaluate two pinned policies against the same unchanged tree
   abacus standards --base REVISION [--json] [--fail-on any|weakening|none] compare current standards with a Git revision; default reports without blocking
+  abacus lean --id ID --report FILE --toolchain-dir DIR [--timeout MS]  explicitly build/recheck registered Lean models in Linux isolation
   abacus verify --id ID --profile PROFILE --format FORMAT --report FILE --evidence FILE [--environment isolated|staging] [--timeout MS] -- COMMAND [ARGS…]
                                                                          record source-bound verification; artifacts must be outside the project
 `;
@@ -73,7 +75,7 @@ const COMMANDS = {
         const gates = rest.includes("--all") ? [...SOURCE_GATES] : [...config.check.gates];
         if (rest.includes("--with-size"))
             gates.push("size");
-        if (!config.policy && !rest.includes("--json") && !flag("--evidence") && !flag("--at"))
+        if (!config.policy && !config.verification?.reports.length && !rest.includes("--json") && !flag("--evidence") && !flag("--at"))
             return reportCheck(config, gates, process.cwd(), top()) ? 0 : 1;
         const result = evaluatePolicy(config, process.cwd(), { gates, includeRepositoryGates: rest.includes("--all") || rest.includes("--with-size"), evaluatedAt: flag("--at") });
         const json = `${JSON.stringify(result, null, 2)}\n`;
@@ -93,13 +95,21 @@ const COMMANDS = {
         console.log(computePolicyPackDigest(file));
         return 0;
     },
+    lean: () => {
+        const id = flag("--id"), report = flag("--report"), toolchainDir = flag("--toolchain-dir");
+        if (!id || !report || !toolchainDir)
+            throw new Error("lean requires --id, --report and --toolchain-dir");
+        const result = runLeanVerification({ id, report, toolchainDir, timeoutMs: flag("--timeout") ? Number(flag("--timeout")) : undefined });
+        console.log(`Lean model: ${result.targets.length} registered theorems checked and rechecked`);
+        return 0;
+    },
     verify: () => {
         const separator = rest.indexOf("--");
         if (separator < 0)
             throw new Error("verify requires -- followed by a command and arguments");
         const option = (name) => { const i = rest.slice(0, separator).indexOf(name); if (i < 0 || i + 1 >= separator)
             throw new Error(`verify requires ${name}`); return rest[i + 1]; };
-        const record = recordVerification({ id: option("--id"), profile: enumValue(option("--profile"), ["behavior", "authorization", "resilience", "performance", "dependencies"]), format: enumValue(option("--format"), ["vitest", "playwright", "contract", "pnpm-audit"]),
+        const record = recordVerification({ id: option("--id"), profile: enumValue(option("--profile"), ["behavior", "authorization", "resilience", "performance", "dependencies", "formal"]), format: enumValue(option("--format"), ["vitest", "playwright", "contract", "pnpm-audit", "lean"]),
             report: option("--report"), evidence: option("--evidence"), command: rest.slice(separator + 1),
             environment: rest.slice(0, separator).includes("--environment") ? enumValue(option("--environment"), ["isolated", "staging"]) : undefined,
             timeoutMs: rest.slice(0, separator).includes("--timeout") ? Number(option("--timeout")) : undefined }, process.cwd(), loadConfig().provenance?.exclude);
