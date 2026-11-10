@@ -90,7 +90,7 @@ function walk(dir: string, exclude: RegExp[], out: string[]): void {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) { if (entry.name !== "node_modules" && entry.name !== "dist") walk(full, exclude, out); }
-    else if (/\.(ts|tsx|mts|cts)$/u.test(entry.name) && !exclude.some((re) => re.test(full))) out.push(full);
+    else if (/\.(ts|tsx|mts|cts|js|mjs|cjs|jsx)$/u.test(entry.name) && !exclude.some((re) => re.test(full))) out.push(full);
   }
 }
 

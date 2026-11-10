@@ -2,10 +2,12 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, test, vi } from "vitest";
-import { reportAbc, scoreSource } from "../src/abc.js";
+import { reportAbc, scoreProject, scoreSource } from "../src/abc.js";
 import { defaults } from "../src/config.js";
 
 const config = { abc: { budget: 60, allow: {} } };
+
+const pickScores = (scores: ReturnType<typeof scoreSource>) => scores.map(({ name, a, b, c, score }) => ({ name, a, b, c, score }));
 
 describe("ABC scoring", () => {
   test("counts assignments, calls and conditions per function; nested functions scored separately", () => {
@@ -105,6 +107,83 @@ describe("ABC scoring", () => {
       expect(error).toHaveBeenCalledWith(expect.stringContaining("2 function(s) over budget"));
       expect(log.mock.calls.flat().join("\n")).toContain("get value");
       expect(log.mock.calls.flat().join("\n")).toContain("set value");
+    } finally {
+      log.mockRestore();
+      error.mockRestore();
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test.each(["js", "mjs", "cjs"])("scores .%s with the same semantics as the TypeScript twin", (ext) => {
+    const tsSrc = `
+      export function outer(x: number) {
+        let a = 1;
+        a += x;
+        const b = f(a);
+        if (a > 2 && b) {
+          return g();
+        }
+        const inner = () => h(1) || h(2);
+        return inner();
+      }`;
+    const jsSrc = `
+      export function outer(x) {
+        let a = 1;
+        a += x;
+        const b = f(a);
+        if (a > 2 && b) {
+          return g();
+        }
+        const inner = () => h(1) || h(2);
+        return inner();
+      }`;
+    expect(pickScores(scoreSource(`x.${ext}`, jsSrc, config))).toEqual(pickScores(scoreSource("x.ts", tsSrc, config)));
+    expect(pickScores(scoreSource(`x.${ext}`, jsSrc, config))).toMatchObject([{ name: "outer", a: 4, b: 3, c: 4 }, { name: "inner", a: 0, b: 2, c: 1 }]);
+  });
+
+  test("scores CommonJS shapes in .cjs files", () => {
+    const src = `
+      const { read } = require("./store");
+      function load(id) {
+        const row = read(id);
+        if (!row) return null;
+        return row;
+      }
+      module.exports = { load };`;
+    const scores = scoreSource("store.cjs", src, config);
+    const load = scores.find((s) => s.name === "load");
+    expect(load).toMatchObject({ a: 1, b: 1, c: 3 });
+    expect(scores).toHaveLength(1);
+  });
+
+  test("project discovery scores .js, .mjs and .cjs files alongside TypeScript", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "abacus-js-discovery-"));
+    try {
+      fs.mkdirSync(path.join(dir, "src"));
+      fs.writeFileSync(path.join(dir, "src/esm.js"), "export function fromJs() { return go(); }");
+      fs.writeFileSync(path.join(dir, "src/mod.mjs"), "export function fromMjs() { return go(); }");
+      fs.writeFileSync(path.join(dir, "src/cjs.cjs"), "function fromCjs() { return go(); }\nmodule.exports = { fromCjs };");
+      fs.writeFileSync(path.join(dir, "src/ts.ts"), "export function fromTs() { return go(); }");
+      const { scores, files } = scoreProject(defaults("typescript"), dir);
+      expect(files).toBe(4);
+      expect(scores.map((s) => s.name).sort()).toEqual(["fromCjs", "fromJs", "fromMjs", "fromTs"]);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("fails the project gate for an over-budget JavaScript function", () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "abacus-js-gate-"));
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      fs.mkdirSync(path.join(dir, "src"));
+      fs.writeFileSync(path.join(dir, "src/big.js"), "export function big() { return a(b(c(d(e(f(g(h()))))))); }");
+      const strict = defaults("typescript");
+      strict.abc.budget = 3;
+      expect(reportAbc(strict, 10, dir)).toBe(false);
+      expect(error).toHaveBeenCalledWith(expect.stringContaining("1 function(s) over budget"));
+      expect(log.mock.calls.flat().join("\n")).toContain("big");
     } finally {
       log.mockRestore();
       error.mockRestore();

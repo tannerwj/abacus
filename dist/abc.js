@@ -100,7 +100,7 @@ function walk(dir, exclude, out) {
             if (entry.name !== "node_modules" && entry.name !== "dist")
                 walk(full, exclude, out);
         }
-        else if (/\.(ts|tsx|mts|cts)$/u.test(entry.name) && !exclude.some((re) => re.test(full)))
+        else if (/\.(ts|tsx|mts|cts|js|mjs|cjs|jsx)$/u.test(entry.name) && !exclude.some((re) => re.test(full)))
             out.push(full);
     }
 }
