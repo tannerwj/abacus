@@ -30,8 +30,9 @@
     "check": "pnpm build && tsc -p tsconfig.json --noEmit && pnpm test && node dist/cli.js check",
     "check:all": "pnpm build && tsc -p tsconfig.json --noEmit && pnpm test && node dist/cli.js check --all",
     "test:install": "node test/fresh-install.mjs",
-    "test:verification": "pnpm build && node test/verification-e2e.mjs && node test/standards-e2e.mjs",
-    "test:properties": "vitest run test/policy.test.ts test/preview.test.ts test/verification-reports.test.ts --maxWorkers=2 && node test/prove-properties.mjs"
+    "test:verification": "pnpm build && node test/verification-e2e.mjs && node test/standards-e2e.mjs && node test/lean-evidence-e2e.mjs",
+    "test:properties": "vitest run test/policy.test.ts test/preview.test.ts test/verification-reports.test.ts --maxWorkers=2 && node test/prove-properties.mjs && node test/prove-lean-evidence.mjs",
+    "test:lean-native": "pnpm build && node test/lean-native-e2e.mjs"
   },
   "peerDependencies": {
     "oxfmt": ">=0.60.0",

@@ -6,7 +6,9 @@ configured envelopes without executing their commands. Verification is opt-in
 and remains separate from `--all`, so a source-only run never claims tests ran.
 
 Supported formats are Vitest JSON, Playwright JSON, pnpm audit JSON and a small
-contract format for existing E2E tools such as tester-army/e2e. Abacus does not
+contract format for existing E2E tools such as tester-army/e2e. An optional
+[Lean model verification adapter](lean-verification.md) adds pinned build, kernel
+replay and transitive axiom auditing for explicitly registered formal targets. Abacus does not
 install a test framework into consumers or choose their test cases.
 
 ## Record a test run

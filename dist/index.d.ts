@@ -15,3 +15,6 @@ export { recordVerification, verificationEvidence, type VerificationRecord, type
 export { parseVerificationReport, type ReportFormat, type VerificationSummary, type Measurement } from "./verification-reports.js";
 export { validateVerificationConfig, type VerificationConfig, type VerificationSpec, type VerificationBudget, type VerificationProfile } from "./verification-config.js";
 export { reportStandards, type StandardsReport, type StandardsChange, type StandardsClassification } from "./standards.js";
+export { validateLeanConfig, leanConfigurationDigest, LEAN_TOOLCHAIN, type LeanConfig, type LeanTarget } from "./lean-config.js";
+export { parseLeanReport, validateLeanEvidence, type LeanReport } from "./lean-report.js";
+export { runLeanVerification, digestToolchain, type RunLeanOptions } from "./lean-runner.js";

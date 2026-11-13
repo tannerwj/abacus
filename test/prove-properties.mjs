@@ -14,10 +14,10 @@ const vitest = path.join(
 const mutants = [
   {
     name: "canonical key ordering",
-    file: "src/policy.ts",
+    file: "src/canonical-json.ts",
     testFile: "test/policy.test.ts",
     test: "canonical JSON is invariant",
-    from: ".sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0)",
+    from: ".sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))",
     to: ".sort(() => 0)",
   },
   {

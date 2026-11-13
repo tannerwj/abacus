@@ -1,3 +1,4 @@
+import { validateLeanEvidence } from "./lean-report.js";
 import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
@@ -184,6 +185,13 @@ function budgetFindings(spec, summary) {
     }
     return { findings, missing };
 }
+function verificationUnit(profile) {
+    if (profile === "dependencies")
+        return "dependencies";
+    if (profile === "formal")
+        return "theorems";
+    return "cases";
+}
 function summarize(spec, summary, record) {
     const { findings, missing } = budgetFindings(spec, summary);
     for (const id of spec.assertions ?? []) {
@@ -216,7 +224,7 @@ function summarize(spec, summary, record) {
             kind: "repository",
             targets: [spec.id],
             scanned: summary.total,
-            unit: spec.profile === "dependencies" ? "dependencies" : "cases",
+            unit: verificationUnit(spec.profile),
         },
         findings,
         coverage: {
@@ -247,6 +255,11 @@ export function verificationEvidence(spec, cwd, source, evaluatedAt) {
             const reportPath = externalPath(cwd, record.report.path), raw = safeRead(reportPath);
             if (raw.hash !== record.report.digest)
                 throw new Error("Report bytes changed");
+            if (spec.format === "lean") {
+                if (!spec.lean || record.command.exitCode !== 0 || record.issues.length)
+                    throw new Error("Incomplete Lean execution");
+                validateLeanEvidence(raw.value, spec.lean, cwd);
+            }
             summary = parseVerificationReport(spec.format, raw.value);
             if (canonicalPolicyJson(summary) !== canonicalPolicyJson(record.summary))
                 throw new Error("Cached summary disagrees with report");

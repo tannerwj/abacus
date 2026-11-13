@@ -1,3 +1,4 @@
+import { validateLeanConfig } from "./lean-config.js";
 import { REPORT_FORMATS, reportArray, reportId, reportObject, } from "./verification-reports.js";
 export const VERIFICATION_PROFILES = [
     "behavior",
@@ -5,6 +6,7 @@ export const VERIFICATION_PROFILES = [
     "resilience",
     "performance",
     "dependencies",
+    "formal",
 ];
 function numeric(value, label, minimum = 0) {
     if (typeof value !== "number" || !Number.isFinite(value) || value < minimum)
@@ -52,6 +54,13 @@ function validateLimits(item) {
         if (item[key] !== undefined && !Number.isSafeInteger(item[key]))
             throw new Error("Verification count limits must be integers");
 }
+function formalRequirements(item, assertions, budgets) {
+    if (item.format === "lean" || item.profile === "formal" || item.lean !== undefined) {
+        if (item.format !== "lean" || item.profile !== "formal" || item.environment !== "isolated" || assertions.length || budgets.length)
+            throw new Error("Formal verification requires isolated Lean evidence and registered targets");
+        validateLeanConfig(item.lean);
+    }
+}
 function assertSpec(value) {
     const item = reportObject(value);
     const allowed = new Set([
@@ -67,6 +76,7 @@ function assertSpec(value) {
         "environment",
         "assertions",
         "budgets",
+        "lean",
     ]);
     if (Object.keys(item).some((key) => !allowed.has(key)))
         throw new Error("Unsupported verification report field");
@@ -89,6 +99,7 @@ function assertSpec(value) {
     const budgets = reportArray(item.budgets ?? []).map(validateBudget);
     unique(budgets.map((budget) => budget.id), "budgets");
     profileRequirements(item, assertions, budgets);
+    formalRequirements(item, assertions, budgets);
 }
 export function validateVerificationConfig(value) {
     const raw = reportObject(value);

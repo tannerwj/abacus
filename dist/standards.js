@@ -20,7 +20,7 @@ function arrays(field, before, after) {
                 ? "New exclusions or exceptions require review"
                 : "Exclusions or exceptions were removed",
         };
-    if (/\/(?:gates|roots|projects|targets|assertions)$/u.test(field))
+    if (/\/(?:gates|roots|projects|targets|assertions|specifications)$/u.test(field))
         return {
             classification: removed ? "weakening" : "tightening",
             reason: removed
@@ -169,6 +169,23 @@ function policyInputs(manifest, names, read) {
             .map((native) => path.posix.normalize(path.posix.join(path.posix.dirname(manifest), native))),
     ];
 }
+function formalInputs(raw, file, names) {
+    const selected = [];
+    if (!object(raw.verification) || !Array.isArray(raw.verification.reports))
+        return selected;
+    for (const report of raw.verification.reports) {
+        if (!object(report) || !object(report.lean))
+            continue;
+        const lean = report.lean;
+        const specifications = Array.isArray(lean.specifications) ? lean.specifications : [];
+        selected.push(...specifications.filter((item) => typeof item === "string").map((item) => path.posix.normalize(path.posix.join(path.posix.dirname(file), item))));
+        if (typeof lean.project !== "string")
+            continue;
+        const project = path.posix.normalize(path.posix.join(path.posix.dirname(file), lean.project));
+        selected.push(...names.filter((name) => name.startsWith(`${project}/`) && !name.startsWith(`${project}/.lake/`)));
+    }
+    return selected;
+}
 function configuredInputs(file, content, names, read) {
     const raw = jsonObject(content), selected = [];
     const ratchet = object(raw.ratchet) ? raw.ratchet.file : undefined;
@@ -177,6 +194,7 @@ function configuredInputs(file, content, names, read) {
     const pack = object(raw.policy) && object(raw.policy.pack) ? raw.policy.pack.path : undefined;
     if (typeof pack === "string" && !path.isAbsolute(pack))
         selected.push(...policyInputs(path.posix.normalize(path.posix.join(path.posix.dirname(file), pack)), names, read));
+    selected.push(...formalInputs(raw, file, names));
     return selected;
 }
 function inventory(cwd, revision) {

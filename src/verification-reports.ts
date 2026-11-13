@@ -1,7 +1,8 @@
+import { leanSummary } from "./lean-report.js";
 import { digest } from "./evidence.js";
 import { objectValue, enumValue } from "./json-values.js";
 
-export const REPORT_FORMATS = ["vitest", "playwright", "contract", "pnpm-audit"] as const;
+export const REPORT_FORMATS = ["vitest", "playwright", "contract", "pnpm-audit", "lean"] as const;
 export type ReportFormat = (typeof REPORT_FORMATS)[number];
 export type CaseStatus = "passed" | "failed" | "skipped";
 export interface Measurement {
@@ -248,6 +249,7 @@ export function parseVerificationReport(format: ReportFormat, value: unknown): V
     playwright: playwrightReport,
     contract: contractReport,
     "pnpm-audit": auditReport,
+    lean: leanSummary,
   };
   if (!Object.hasOwn(parsers, format)) throw new Error("Unsupported report format");
   return parsers[format](raw);

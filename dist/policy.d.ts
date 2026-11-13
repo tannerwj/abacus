@@ -1,3 +1,4 @@
+export { canonicalPolicyJson } from "./canonical-json.js";
 import { type AbacusConfig } from "./config.js";
 import { type AdapterResult, type Enforcement, type Finding } from "./evidence.js";
 export declare const POLICY_GATES: readonly ["lint", "abc", "ratchet", "tsc", "deadcode", "secrets", "cycles", "dupes", "todos", "size", "architecture", "package"];
@@ -88,8 +89,6 @@ export interface RepositoryException {
 }
 export declare function validatePolicyParameters(value: unknown): PolicyParameters;
 export declare function validatePolicyPack(value: unknown): PolicyPack;
-/** Stable key ordering makes JSON whitespace/ordering irrelevant, while every native byte is pinned. */
-export declare function canonicalPolicyJson(value: unknown): string;
 export declare function computePolicyPackDigest(packOrFile: PolicyPack | string, root?: string): string;
 export declare function resolvePolicyPack(ref: PolicyPackReference, cwd?: string, runtime?: PolicyRuntime): ResolvedPolicyPack;
 export declare function satisfiesToolVersion(version: string, requirement: string): boolean;
@@ -101,4 +100,3 @@ export declare function expiredExceptions(exceptions: RepositoryException[], eva
 export declare function applyExceptions<T extends AdapterResult>(result: T, exceptions: RepositoryException[], evaluatedAt: string): T;
 /** Merge only supported parameters; arrays replace rather than concatenate. No baseline is written. */
 export declare function applyPolicyParameters(config: AbacusConfig, parameters?: PolicyParameters): AbacusConfig;
-export {};

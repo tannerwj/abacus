@@ -1,3 +1,5 @@
+import { canonicalPolicyJson } from "./canonical-json.js";
+export { canonicalPolicyJson } from "./canonical-json.js";
 import { objectValue, isRecord } from "./json-values.js";
 import fs from "node:fs";
 import path from "node:path";
@@ -172,12 +174,7 @@ function assertPolicyPack(value: unknown): asserts value is PolicyPack {
 
 }
 
-/** Stable key ordering makes JSON whitespace/ordering irrelevant, while every native byte is pinned. */
-export function canonicalPolicyJson(value: unknown): string {
-  if (value === null || typeof value !== "object") return JSON.stringify(value) ?? "null";
-  if (Array.isArray(value)) return `[${value.map(canonicalPolicyJson).join(",")}]`;
-  return `{${Object.entries(value).filter(([, item]) => item !== undefined).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0).map(([key, item]) => `${JSON.stringify(key)}:${canonicalPolicyJson(item)}`).join(",")}}`;
-}
+
 function packFiles(pack: PolicyPack): string[] { return [...new Set([...pack.checks.flatMap((check) => check.nativeConfig ? [check.nativeConfig] : []), ...(pack.nativeFiles ?? [])])].sort(); }
 export function computePolicyPackDigest(packOrFile: PolicyPack | string, root?: string): string {
   const file = typeof packOrFile === "string" ? fs.realpathSync(packOrFile) : undefined;
